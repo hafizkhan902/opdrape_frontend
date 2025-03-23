@@ -15,16 +15,64 @@
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
     -->
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <!--
-      Notice the use of %PUBLIC_URL% in the tags above.
-      It will be replaced with the URL of the `public` folder during the build.
-      Only files inside the `public` folder can be referenced from the HTML.
+    <!-- Cross-browser polyfills -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=default,Array.prototype.includes,Promise,Object.entries,Object.values,URL,fetch,Symbol,Array.prototype.find,IntersectionObserver"></script>
+    <!-- Fix for older browsers -->
+    <script>
+      // Fix for old browsers where URLSearchParams may not be available
+      if (!window.URLSearchParams) {
+        window.URLSearchParams = function(init) {
+          this.params = new Object();
+          
+          if (init) {
+            // Handle string input
+            if (typeof init === 'string') {
+              init = init.replace(/^\?/, ''); // Remove leading ? if present
+              var pairs = init.split('&');
+              for (var i = 0; i < pairs.length; i++) {
+                var pair = pairs[i].split('=');
+                var key = decodeURIComponent(pair[0] || '');
+                var value = decodeURIComponent(pair[1] || '');
+                if (key) this.append(key, value);
+              }
+            }
+          }
+        };
 
-      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-      work correctly both with client-side routing and a non-root public URL.
-      Learn how to configure a non-root public URL by running `npm run build`.
-    -->
-    <title>React App</title>
+        window.URLSearchParams.prototype.append = function(name, value) {
+          if (name in this.params) {
+            if (Array.isArray(this.params[name])) {
+              this.params[name].push(value);
+            } else {
+              this.params[name] = [this.params[name], value];
+            }
+          } else {
+            this.params[name] = value;
+          }
+        };
+
+        window.URLSearchParams.prototype.get = function(name) {
+          var value = this.params[name];
+          return Array.isArray(value) ? value[0] : value;
+        };
+
+        window.URLSearchParams.prototype.toString = function() {
+          var pairs = [];
+          for (var key in this.params) {
+            var value = this.params[key];
+            if (Array.isArray(value)) {
+              for (var i = 0; i < value.length; i++) {
+                pairs.push(encodeURIComponent(key) + '=' + encodeURIComponent(value[i] || ''));
+              }
+            } else {
+              pairs.push(encodeURIComponent(key) + '=' + encodeURIComponent(value || ''));
+            }
+          }
+          return pairs.join('&');
+        };
+      }
+    </script>
+    <title>Modern Shop</title>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

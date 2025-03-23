@@ -1,0 +1,185 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 400;
+  border-radius: 0;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+  border: 1px solid #000000;
+  outline: none;
+  gap: 8px;
+  font-family: inherit;
+  background-color: transparent;
+  color: #000000;
+}
+
+/* Button Sizes */
+.btn-small {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+}
+
+.btn-medium {
+  padding: 6px 14px;
+  font-size: 0.85rem;
+}
+
+.btn-large {
+  padding: 8px 20px;
+  font-size: 0.9rem;
+}
+
+/* Button Variants - Ultra-Minimalist Design with Black */
+.btn-primary {
+  border-color: #000000;
+  color: #000000;
+  font-weight: 500;
+}
+
+.btn-primary:hover {
+  background-color: #000000;
+  color: #ffffff;
+}
+
+.btn-secondary {
+  border-color: #000000;
+  color: #000000;
+  border-width: 1px;
+}
+
+.btn-secondary:hover {
+  text-decoration: underline;
+}
+
+.btn-outline {
+  border-color: #000000;
+  color: #000000;
+  border-width: 1px;
+}
+
+.btn-outline:hover {
+  background-color: #f8f8f8;
+  text-decoration: underline;
+}
+
+.btn-text {
+  border: none;
+  color: #000000;
+  padding: 6px 8px;
+}
+
+.btn-text:hover {
+  text-decoration: underline;
+}
+
+/* Keep danger button with red */
+.btn-danger {
+  border-color: #b25d4a;
+  color: #b25d4a;
+}
+
+.btn-danger:hover {
+  background-color: #b25d4a;
+  color: #ffffff;
+}
+
+/* Button States */
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+.btn:disabled:hover {
+  background-color: transparent;
+  color: #000000;
+  text-decoration: none;
+}
+
+.btn-full-width {
+  width: 100%;
+}
+
+/* Loading state */
+.btn-loading {
+  position: relative;
+}
+
+.btn-spinner {
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 50%;
+  border-top-color: #000000;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  .btn {
+    color: #ffffff;
+    border-color: #ffffff;
+  }
+  
+  .btn-primary {
+    border-color: #ffffff;
+    color: #ffffff;
+  }
+  
+  .btn-primary:hover {
+    background-color: #ffffff;
+    color: #000000;
+  }
+  
+  .btn-secondary {
+    border-color: #ffffff;
+    color: #ffffff;
+  }
+  
+  .btn-outline {
+    border-color: #ffffff;
+    color: #ffffff;
+  }
+  
+  .btn-outline:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .btn-text {
+    color: #ffffff;
+  }
+  
+  /* Keep danger button with specific colors */
+  .btn-danger {
+    border-color: #c2705e;
+    color: #c2705e;
+  }
+  
+  .btn-danger:hover {
+    background-color: #c2705e;
+    color: #ffffff;
+  }
+  
+  .btn-spinner {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-top-color: #ffffff;
+  }
+  
+  .btn:disabled {
+    border-color: #555555;
+    color: #aaaaaa;
+  }
+  
+  .btn:disabled:hover {
+    background-color: transparent;
+    color: #aaaaaa;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+} 

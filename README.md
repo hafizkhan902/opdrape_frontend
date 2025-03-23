@@ -1,70 +1,117 @@
-# Getting Started with Create React App
+# StyleShop E-commerce Frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A modern React-based e-commerce application with a clean, responsive UI and robust functionality.
+
+## Features
+
+- Responsive design for all devices
+- User authentication and account management
+- Product browsing with filtering and sorting
+- Shopping cart and wishlist functionality
+- Order management
+- Admin dashboard (coming soon)
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v14 or later)
+- npm or yarn
+
+### Installation
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/yourusername/styleshop-frontend.git
+   cd styleshop-frontend
+   ```
+
+2. Install dependencies:
+   ```
+   npm install
+   ```
+   or
+   ```
+   yarn install
+   ```
+
+3. Environment Configuration:
+   
+   Create a `.env` file in the root directory with the following variables:
+   ```
+   # API Configuration
+   REACT_APP_API_URL=http://localhost:8000/api
+   REACT_APP_API_TIMEOUT=30000
+   
+   # Authentication
+   REACT_APP_AUTH_TOKEN_NAME=token
+   
+   # Feature Flags
+   REACT_APP_ENABLE_ANALYTICS=false
+   REACT_APP_ENABLE_NOTIFICATIONS=true
+   
+   # Other Configuration
+   REACT_APP_ITEMS_PER_PAGE=12
+   REACT_APP_MAX_PRICE_FILTER=1000
+   ```
+   
+   You can copy the `.env.example` file as a starting point:
+   ```
+   cp .env.example .env
+   ```
+   
+   Then customize the values as needed.
+
+4. Start the development server:
+   ```
+   npm start
+   ```
+   or
+   ```
+   yarn start
+   ```
+
+5. Open your browser and navigate to [http://localhost:3000](http://localhost:3000)
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| REACT_APP_API_URL | Base URL for the backend API | http://localhost:8000/api |
+| REACT_APP_API_TIMEOUT | Timeout for API requests (in ms) | 30000 |
+| REACT_APP_AUTH_TOKEN_NAME | Name of the authentication token stored in localStorage | token |
+| REACT_APP_ENABLE_ANALYTICS | Enable/disable analytics features | false |
+| REACT_APP_ENABLE_NOTIFICATIONS | Enable/disable notification features | true |
+| REACT_APP_ITEMS_PER_PAGE | Number of items to display per page in listings | 12 |
+| REACT_APP_MAX_PRICE_FILTER | Maximum value for the price range filter | 1000 |
 
 ## Available Scripts
 
-In the project directory, you can run:
+- `npm start`: Runs the app in development mode
+- `npm test`: Launches the test runner
+- `npm run build`: Builds the app for production
+- `npm run eject`: Ejects the configuration files (use with caution)
 
-### `npm start`
+## Project Structure
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+```
+src/
+  ├── components/         # UI components
+  │   ├── auth/           # Authentication components
+  │   ├── common/         # Reusable common components
+  │   ├── layout/         # Layout components
+  │   ├── products/       # Product-related components
+  │   └── ...
+  ├── context/            # React context for state management
+  ├── hooks/              # Custom hooks
+  ├── pages/              # Page components
+  ├── services/           # API services
+  ├── utils/              # Utility functions
+  ├── config/             # Configuration files
+  ├── App.js              # Main App component
+  └── index.js            # Application entry point
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## License
 
-### `npm test`
-
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
-
-### `npm run build`
-
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+This project is licensed under the MIT License - see the LICENSE file for details.

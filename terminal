@@ -1,0 +1,12 @@
+mkdir -p src/components/ui/navigation
+mkdir -p src/components/ui/product
+mkdir -p src/components/ui/shopping
+mkdir -p src/components/ui/auth
+mkdir -p src/components/admin/dashboard
+mkdir -p src/components/admin/product
+mkdir -p src/components/admin/order
+mkdir -p src/components/admin/user
+mkdir -p src/components/user/account
+mkdir -p src/components/user/order
+mkdir -p src/components/user/communication
+mkdir -p src/components/user/preferences 
