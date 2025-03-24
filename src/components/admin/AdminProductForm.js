@@ -110,7 +110,11 @@ const AdminProductForm = () => {
       if (isEditMode) {
         try {
           setProductLoading(true);
-          const product = await getProductById(id);
+          console.log(`Loading product data for ID: ${id} in edit mode`);
+          const response = await getProductById(id, true); // Pass isAdmin=true
+          const product = response.data;
+          
+          console.log(`Product data loaded successfully:`, product);
           
           // Ensure category and subcategory match our valid options
           let category = product.category || 'Clothing';
@@ -164,7 +168,21 @@ const AdminProductForm = () => {
             isActive: product.isActive !== undefined ? product.isActive : true,
             vendor: product.vendor || '',
             image: null,
-            colorVariants: product.colorVariants || [],
+            colorVariants: product.colorVariants?.length > 0 ? product.colorVariants : [
+              {
+                color: {
+                  name: 'Blue',
+                  hexCode: '#0047AB'
+                },
+                sizes: [
+                  { name: 'S', quantity: 10 },
+                  { name: 'M', quantity: 15 },
+                  { name: 'L', quantity: 10 },
+                  { name: 'XL', quantity: 5 }
+                ],
+                images: []
+              }
+            ],
             discountPrice: product.discountPrice || '',
             isPublished: product.isPublished !== undefined ? product.isPublished : true,
             inStock: product.inStock !== undefined ? product.inStock : true,
@@ -185,6 +203,35 @@ const AdminProductForm = () => {
             setImagePreview(product.image);
           }
           
+          // If there are color variants with images, prepare them for the UI
+          if (product.colorVariants && product.colorVariants.length > 0) {
+            const variantImageFiles = {};
+            
+            product.colorVariants.forEach((variant, variantIndex) => {
+              if (variant.images && variant.images.length > 0) {
+                // Initialize the array for this variant if it doesn't exist
+                if (!variantImageFiles[variantIndex]) {
+                  variantImageFiles[variantIndex] = [];
+                }
+                
+                // Set the existing images as previews
+                variant.images.forEach(image => {
+                  if (image.url) {
+                    variantImageFiles[variantIndex].push({
+                      preview: image.url,
+                      alt: image.alt || '',
+                      existing: true // Mark as existing so we don't re-upload
+                    });
+                  }
+                });
+              }
+            });
+            
+            if (Object.keys(variantImageFiles).length > 0) {
+              setImageFiles(variantImageFiles);
+            }
+          }
+          
           setProductLoading(false);
         } catch (err) {
           console.error('Error loading product:', err);
@@ -195,7 +242,7 @@ const AdminProductForm = () => {
     };
 
     loadProductData();
-  }, [id, isEditMode]);
+  }, [id, isEditMode, categories]);
   
   // Load product categories
   useEffect(() => {
@@ -544,6 +591,8 @@ const AdminProductForm = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setSuccess(null);
+    setErrors({});
     
     // Validate form data
     const validationErrors = validateForm();
@@ -564,9 +613,14 @@ const AdminProductForm = () => {
         subCategory: formData.subCategory,
         brand: formData.brand || undefined,
         material: formData.material,
+        sku: formData.sku || '',
+        features: formData.features.filter(feature => feature.trim() !== ''),
+        careInstructions: formData.careInstructions.filter(instruction => instruction.trim() !== ''),
+        tags: formData.tags.filter(tag => tag.trim() !== ''),
         isPublished: formData.isPublished,
         inStock: formData.inStock,
         isFeatured: formData.isFeatured,
+        vendor: formData.vendor || undefined,
         metadata: {
           isNewArrival: formData.metadata.isNewArrival,
           isBestSeller: formData.metadata.isBestSeller,
@@ -633,15 +687,30 @@ const AdminProductForm = () => {
       let response;
       if (id) {
         // Update existing product
+        console.log(`Updating existing product with ID ${id}...`);
         response = await updateProduct(id, productPayload);
-        toast.success('Product updated successfully');
+        
+        // Show success message
+        toast.success('Product updated successfully!');
+        setSuccess('Product updated successfully! Redirecting to product list...');
+        
+        // Redirect after a short delay
+        setTimeout(() => {
+          navigate('/admin/products');
+        }, 1500);
       } else {
         // Create new product
+        console.log('Creating new product...');
         response = await createProduct(productPayload);
-        toast.success('Product created successfully');
+        
+        // Show success message
+        toast.success('Product created successfully!');
+        setSuccess('Product created successfully! You can add another product or return to the list.');
       }
 
-      // Check if we need to redirect or reset the form
+      console.log(`Product ${id ? 'updated' : 'created'} with response:`, response.data);
+
+      // If creating a new product, reset the form
       if (!id) {
         // Reset form when creating a new product
         setFormData({
@@ -698,19 +767,59 @@ const AdminProductForm = () => {
             }
           }
         });
+        
+        // Clear form state
         setImagePreview(null);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-      } else {
-        // Redirect after update
-        navigate('/admin/products');
+        setImageFiles({});
       }
+      
+      setLoading(false);
     } catch (error) {
       console.error('Error saving product:', error);
-      toast.error(error.response?.data?.message || 'Failed to save product');
-    } finally {
       setLoading(false);
+      
+      // Handle specific error cases
+      if (error.response) {
+        const { status, data } = error.response;
+        
+        if (status === 400 && data.errors) {
+          // Validation errors from the server
+          const serverErrors = {};
+          
+          // Map server validation errors to form fields
+          Object.entries(data.errors).forEach(([field, message]) => {
+            serverErrors[field] = Array.isArray(message) ? message[0] : message;
+          });
+          
+          setErrors(serverErrors);
+          toast.error('Please correct the validation errors.');
+        } else if (status === 401 || status === 403) {
+          // Authentication or authorization error
+          toast.error('You do not have permission to perform this action.');
+          setErrors({ form: 'You do not have permission to perform this action.' });
+        } else if (status === 404) {
+          // Product not found (for updates)
+          toast.error('Product not found. It may have been deleted.');
+          setErrors({ form: 'Product not found. It may have been deleted.' });
+        } else if (status === 500) {
+          // Server error
+          toast.error('Server error occurred. Please try again later.');
+          setErrors({ form: 'Server error occurred. Please try again later.' });
+        } else {
+          // Generic error with server response
+          const errorMessage = data.message || 'An error occurred while saving the product.';
+          toast.error(errorMessage);
+          setErrors({ form: errorMessage });
+        }
+      } else if (error.request) {
+        // Request made but no response received
+        toast.error('Unable to connect to the server. Please check your internet connection.');
+        setErrors({ form: 'Unable to connect to the server. Please check your internet connection.' });
+      } else {
+        // Error in request setup
+        toast.error('An error occurred while preparing the request.');
+        setErrors({ form: error.message || 'An error occurred while preparing the request.' });
+      }
     }
   };
   
@@ -1058,18 +1167,28 @@ const AdminProductForm = () => {
   
   return (
     <div className="admin-product-form-container">
-      {/* Header */}
-      <div className="form-header">
+      <div className="admin-product-form-header">
         <h1>{isEditMode ? 'Edit Product' : 'Add New Product'}</h1>
-        <button 
-          className="back-button" 
-          onClick={() => navigate('/admin/products')}
-        >
-          <FaArrowLeft /> Back to Products
-        </button>
+        <div className="action-buttons">
+          <button
+            className="cancel-button"
+            type="button"
+            onClick={() => navigate('/admin/products')}
+          >
+            <FaArrowLeft /> Back to Products
+          </button>
+        </div>
       </div>
       
-      {/* Success message */}
+      {/* Display loading state for product data */}
+      {productLoading && (
+        <div className="loading-overlay">
+          <FaSpinner className="loading-icon" />
+          <p>Loading product data...</p>
+        </div>
+      )}
+      
+      {/* Display success message */}
       {success && (
         <div className="form-success-message">
           <FaCheck />
@@ -1077,15 +1196,28 @@ const AdminProductForm = () => {
         </div>
       )}
       
-      {/* Error message */}
+      {/* Display form-level error message */}
+      {errors.form && (
+        <div className="form-error-message">
+          <FaExclamationTriangle />
+          <p>{errors.form}</p>
+        </div>
+      )}
+      
+      {/* Display product loading error */}
       {errors.product && (
         <div className="form-error-message">
           <FaExclamationTriangle />
           <p>{errors.product}</p>
+          <button 
+            className="retry-button"
+            onClick={() => window.location.reload()}
+          >
+            Try Again
+          </button>
         </div>
       )}
       
-      {/* Form */}
       <form onSubmit={handleSubmit}>
         <div className="form-grid">
           <div className="form-column">

@@ -9,8 +9,6 @@ import {
   faCheckCircle,
   faExclamationTriangle,
   faSpinner,
-  faMoneyBill,
-  faMobileAlt,
   faShoppingCart
 } from '@fortawesome/free-solid-svg-icons';
 import { getUserCart, getUserProfile, createOrder, clearCart, getProductById } from '../../services/api';
@@ -95,7 +93,6 @@ const extractProductId = (item) => {
 const Checkout = () => {
   const navigate = useNavigate();
   const [cartItems, setCartItems] = useState([]);
-  const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -132,150 +129,80 @@ const Checkout = () => {
       try {
         // Fetch cart items
         const cartResponse = await getUserCart();
-        console.log('Cart response:', cartResponse); // Debug log
 
         // Extract cart items from different possible response structures
         let extractedItems = [];
         
         if (cartResponse?.data) {
-          // Try different possible cart data structures
           if (Array.isArray(cartResponse.data)) {
-            // If data is directly an array of items
             extractedItems = cartResponse.data;
           } else if (Array.isArray(cartResponse.data.items)) {
-            // If data has an items array
             extractedItems = cartResponse.data.items;
           } else if (cartResponse.data.cart && Array.isArray(cartResponse.data.cart.items)) {
-            // If data has cart.items array
             extractedItems = cartResponse.data.cart.items;
           } else if (cartResponse.data.products && Array.isArray(cartResponse.data.products)) {
-            // If data has products array
             extractedItems = cartResponse.data.products;
           } else if (typeof cartResponse.data === 'object' && Object.keys(cartResponse.data).length > 0) {
-            // If data is an object (possibly a single cart item)
             extractedItems = [cartResponse.data];
           }
         }
         
-        console.log('Extracted items before processing:', extractedItems);
-        
-        // If no items were found with the standard structures, check if there's a non-standard structure
-        if (extractedItems.length === 0 && cartResponse?.data) {
-          // Look for any array in the response that might contain cart items
-          for (let key in cartResponse.data) {
-            if (Array.isArray(cartResponse.data[key]) && cartResponse.data[key].length > 0) {
-              extractedItems = cartResponse.data[key];
-              console.log(`Found potential cart items in property: ${key}`, extractedItems);
-              break;
-            }
-          }
-        }
-        
-        // Process and normalize cart items to ensure they have all required properties
+        // Process and normalize cart items
         const normalizedItems = extractedItems.map(item => {
-          // Extract product ID using the helper function
           const productId = extractProductId(item);
-          console.log(`Extracted product ID for item:`, { item, productId });
-          
-          // Determine the item structure and extract relevant data
-          const normalizedItem = {
-            // Use the extracted product ID
+          return {
             productId: productId || '',
-            
-            // Try different property names to find the product name
             name: item.name || item.productName || item.title || item.product_name || 
                   (item.product && (item.product.name || item.product.title)) || 'Product',
-            
-            // Try different property names to find the price
             price: parseFloat(item.price || item.unit_price || item.unitPrice || 
                    (item.product && (item.product.price || item.product.unit_price)) || 0),
-            
-            // Try different property names to find the quantity
             quantity: parseInt(item.quantity || item.qty || item.count || 1),
-            
-            // Try different property names to find the product image
             image: item.image || item.thumbnail || item.img || item.picture || 
                    (item.product && (item.product.image || item.product.thumbnail)) || 
                    'https://via.placeholder.com/60',
-            
-            // Try different property names to find color/size variants
             color: item.color || item.variant_color || (item.variant && item.variant.color) || '',
-            size: item.size || item.variant_size || (item.variant && item.variant.size) || ''
+            size: typeof item.size === 'object' ? item.size.name : (item.size || item.variant_size || (item.variant && item.variant.size) || '')
           };
-          
-          return normalizedItem;
         });
         
-        console.log('Normalized cart items:', normalizedItems);
+        // Filter and fetch product details
+        const validItems = normalizedItems.filter(item => 
+          item.productId && /^[0-9a-f]{24}$/i.test(item.productId)
+        );
         
-        // Filter items with valid product IDs and fetch their detailed information
-        const validItems = normalizedItems.filter(item => {
-          const hasValidId = item.productId && /^[0-9a-f]{24}$/i.test(item.productId);
-          if (!hasValidId) {
-            console.warn(`Skipping item with invalid product ID: ${item.productId}`, item);
-          }
-          return hasValidId;
-        });
-        
-        console.log(`Found ${validItems.length} items with valid product IDs out of ${normalizedItems.length} total items`);
-        
-        // Attempt to fetch product details for each valid item
         let enrichedItems = [];
         
         if (validItems.length > 0) {
           try {
-            // Create an array of promises to fetch all products concurrently
-            const productPromises = validItems.map(item => {
-              return getProductById(item.productId)
+            const productPromises = validItems.map(item => 
+              getProductById(item.productId)
                 .then(response => {
-                  if (!response?.data) {
-                    console.warn(`No data returned for product ${item.productId}`);
-                    return item; // Return original item if no data
-                  }
+                  if (!response?.data) return item;
                   
                   const productData = response.data;
-                  console.log(`Product data for ${item.productId}:`, productData);
-                  
-                  // Validate that the returned product has the expected ID
-                  const returnedId = productData._id || productData.id;
-                  if (returnedId && returnedId !== item.productId) {
-                    console.warn(`Product ID mismatch. Expected: ${item.productId}, Got: ${returnedId}`);
-                  }
-                  
-                  // Return enriched item with product data
                   return {
                     ...item,
-                    productId: item.productId, // Keep original product ID
-                    price: productData.price || item.price || 0,
+                    productId: item.productId,
+                    price: productData.basePrice || productData.price || item.price || 0,
                     name: productData.name || productData.title || item.name,
                     image: productData.image || productData.thumbnail || item.image,
-                    // Add any other product details we want to include
                   };
                 })
-                .catch(error => {
-                  console.error(`Error fetching product ${item.productId}:`, error);
-                  return item; // Return original item on error
-                });
-            });
+                .catch(() => item)
+            );
             
-            // Wait for all product requests to complete
             const fetchedItems = await Promise.all(productPromises);
-            console.log('Fetched product details:', fetchedItems);
-            
-            // Combine fetched items with any invalid items that were filtered out
-            const invalidItems = normalizedItems.filter(item => !item.productId || !/^[0-9a-f]{24}$/i.test(item.productId));
+            const invalidItems = normalizedItems.filter(item => 
+              !item.productId || !/^[0-9a-f]{24}$/i.test(item.productId)
+            );
             enrichedItems = [...fetchedItems, ...invalidItems];
           } catch (error) {
-            console.error('Error fetching product details:', error);
-            enrichedItems = normalizedItems; // Fallback to normalized items
+            enrichedItems = normalizedItems;
           }
         } else {
           enrichedItems = normalizedItems;
         }
         
-        console.log('Final enriched cart items:', enrichedItems);
-        
-        // Set cart items state
         if (enrichedItems.length === 0) {
           setCartError(true);
           setError('Your cart is empty. Please add items to your cart before checkout.');
@@ -284,43 +211,33 @@ const Checkout = () => {
           setCartError(false);
         }
         
-        // Fetch user profile for shipping info
+        // Fetch user profile
         const profileResponse = await getUserProfile();
         if (profileResponse.data) {
-          setUserProfile(profileResponse.data);
-          
-          // Store user profile data in localStorage for retrieval in OrderConfirmation
           try {
             if (!localStorage.getItem('user')) {
               localStorage.setItem('user', JSON.stringify(profileResponse.data.user || profileResponse.data));
             }
-          } catch (storageError) {
-            console.warn('Error storing user profile in localStorage:', storageError);
-          }
-          
-          // Pre-fill shipping form with user profile data if available
-          if (profileResponse.data.user) {
-            const user = profileResponse.data.user;
-            const updatedFormData = {
-              ...formData,
-              fullName: user.name || '',
-              email: user.email || '',
-              phone: user.phone || '',
-              address: user.address?.street || '',
-              city: user.address?.city || '',
-              state: user.address?.state || '',
-              zipCode: user.address?.zipCode || '',
-              country: 'Bangladesh'
-            };
             
-            setFormData(updatedFormData);
-            
-            // Save form data to localStorage immediately if pre-filled
-            try {
+            if (profileResponse.data.user) {
+              const user = profileResponse.data.user;
+              const updatedFormData = {
+                ...formData,
+                fullName: user.name || '',
+                email: user.email || '',
+                phone: user.phone || '',
+                address: user.address?.street || '',
+                city: user.address?.city || '',
+                state: user.address?.state || '',
+                zipCode: user.address?.zipCode || '',
+                country: 'Bangladesh'
+              };
+              
+              setFormData(updatedFormData);
               localStorage.setItem('checkoutFormData', JSON.stringify(updatedFormData));
-            } catch (storageError) {
-              console.warn('Error storing pre-filled form data in localStorage:', storageError);
             }
+          } catch (storageError) {
+            // Silently handle storage errors
           }
         }
       } catch (err) {
@@ -332,16 +249,19 @@ const Checkout = () => {
     };
     
     fetchData();
-  }, []);
+  }, [formData]);
 
   // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    console.log('Input change:', { name, value }); // Debug log
+    
     const updatedFormData = {
       ...formData,
       [name]: value
     };
     
+    console.log('Updated form data:', updatedFormData); // Debug log
     setFormData(updatedFormData);
     
     // Save updated form data to localStorage for later retrieval
@@ -352,62 +272,91 @@ const Checkout = () => {
     }
   };
 
-  // Calculate cart totals
+  // Calculate subtotal from cart items
   const calculateSubtotal = () => {
-    console.log('Calculating subtotal for items:', cartItems);
-    const subtotal = cartItems.reduce((total, item) => {
-      const price = parseFloat(item.price) || 0;
-      const quantity = parseInt(item.quantity) || 0;
-      console.log(`Item: ${item.name}, Price: ${price}, Quantity: ${quantity}, Subtotal: ${price * quantity}`);
-      return total + (price * quantity);
+    if (!cartItems || cartItems.length === 0) return 0;
+    return cartItems.reduce((total, item) => {
+      // First try to get basePrice, then fall back to regular price
+      const itemPrice = item.basePrice || item.price;
+      const price = typeof itemPrice === 'string' ? parseFloat(itemPrice) : itemPrice;
+      const validPrice = isNaN(price) ? 0 : price;
+      
+      const quantity = typeof item.quantity === 'string' ? parseInt(item.quantity) : item.quantity;
+      const validQuantity = isNaN(quantity) ? 0 : quantity;
+      
+      return total + (validPrice * validQuantity);
     }, 0);
-    console.log('Final subtotal:', subtotal);
-    return subtotal;
   };
 
-  const calculateTax = () => {
-    const subtotal = calculateSubtotal();
-    const tax = subtotal * 0.05;
-    console.log('Calculated tax:', tax);
-    return tax;
+  // Calculate tax (5% of subtotal)
+  const calculateTax = (subtotal) => {
+    const taxRate = 0.05; // 5% tax
+    return Math.round(subtotal * taxRate);
   };
 
-  const calculateShipping = () => {
-    const subtotal = calculateSubtotal();
-    const shipping = subtotal > 5000 ? 0 : 120;
-    console.log('Calculated shipping:', shipping);
-    return shipping;
+  // Calculate shipping based on subtotal
+  const calculateShipping = (subtotal) => {
+    return subtotal >= 1000 ? 0 : 60; // Free shipping for orders over ৳1000, otherwise ৳60
   };
 
+  // Calculate total
   const calculateTotal = () => {
     const subtotal = calculateSubtotal();
-    const tax = calculateTax();
-    const shipping = calculateShipping();
-    const total = subtotal + tax + shipping;
-    console.log('Calculated total:', { subtotal, tax, shipping, total });
-    return total;
+    const tax = calculateTax(subtotal);
+    const shipping = calculateShipping(subtotal);
+    return subtotal + tax + shipping;
   };
 
   // Format price with currency
   const formatPrice = (price) => {
-    return new Intl.NumberFormat('bn-BD', {
-      style: 'currency',
-      currency: 'BDT',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(price);
+    if (typeof price !== 'number' || isNaN(price)) {
+      return '৳0';
+    }
+    return `৳${Math.round(price).toLocaleString('en-BD')}`;
   };
 
   // Handle step navigation
-  const handleNextStep = (e) => {
-    e.preventDefault(); // Prevent form submission
+  const handleNextStep = (e, formDataFromShipping) => {
+    // If e is an event object, prevent default behavior
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
+    
+    // Update form data if it's coming from shipping form
+    if (formDataFromShipping) {
+      setFormData(formDataFromShipping);
+    }
     
     // Validate current step
     if (currentStep === 1) {
       // Validate shipping info
-      const { fullName, email, phone, address, city, state, zipCode } = formData;
-      if (!fullName || !email || !phone || !address || !city || !state || !zipCode) {
-        alert('Please fill in all required shipping information fields.');
+      const { fullName, email, phone, address, city, state, zipCode } = formDataFromShipping || formData;
+      
+      // Debug log to see what values we're getting
+      console.log('Current form data:', formDataFromShipping || formData);
+      console.log('Validating shipping info:', {
+        fullName,
+        email,
+        phone,
+        address,
+        city,
+        state,
+        zipCode
+      });
+      
+      // Check each field individually and log which one is missing
+      const missingFields = [];
+      if (!fullName?.trim()) missingFields.push('Full Name');
+      if (!email?.trim()) missingFields.push('Email');
+      if (!phone?.trim()) missingFields.push('Phone');
+      if (!address?.trim()) missingFields.push('Address');
+      if (!city?.trim()) missingFields.push('City');
+      if (!state?.trim()) missingFields.push('State');
+      if (!zipCode?.trim()) missingFields.push('ZIP Code');
+      
+      if (missingFields.length > 0) {
+        console.log('Missing fields:', missingFields);
+        alert(`Please fill in the following required fields: ${missingFields.join(', ')}`);
         return;
       }
     } else if (currentStep === 2) {
@@ -521,11 +470,11 @@ const Checkout = () => {
               image: item.image || 'https://via.placeholder.com/80x80'
             },
             color: item.color || '',
-            size: item.size || ''
+            size: typeof item.size === 'object' ? item.size.name : (item.size || '')
           })),
           subtotal: calculateSubtotal(),
-          shippingCost: calculateShipping(),
-          tax: calculateTax(),
+          shippingCost: calculateShipping(calculateSubtotal()),
+          tax: calculateTax(calculateSubtotal()),
           total: calculateTotal(),
           payment: {
             method: formData.paymentMethod,
@@ -585,8 +534,8 @@ const Checkout = () => {
               }
             },
             subtotal: calculateSubtotal(),
-            shipping: calculateShipping(),
-            tax: calculateTax(),
+            shipping: calculateShipping(calculateSubtotal()),
+            tax: calculateTax(calculateSubtotal()),
             total: calculateTotal(),
             notes: formData.notes
           }
@@ -659,6 +608,21 @@ const Checkout = () => {
     } catch (error) {
       console.warn('Failed to dispatch cartCleared event:', error);
     }
+
+    // Additional step: Force a cart refresh by calling getUserCart
+    try {
+      console.log('Forcing cart refresh...');
+      const cartResponse = await getUserCart();
+      if (cartResponse?.data) {
+        // If we still have items in the cart, try to clear them again
+        if (Array.isArray(cartResponse.data) && cartResponse.data.length > 0) {
+          console.log('Cart still has items, attempting additional clear...');
+          await clearCart();
+        }
+      }
+    } catch (error) {
+      console.warn('Error during forced cart refresh:', error);
+    }
     
     return clearSuccess;
   };
@@ -705,32 +669,87 @@ const Checkout = () => {
       
       console.log(`Using ${validCartItems.length} valid items out of ${cartItems.length} total items for order`);
       
-      // Detailed console log of product IDs for debugging
-      const productIds = validCartItems.map(item => {
+      // Fetch product details for each item to get color variants
+      const productDetailsPromises = validCartItems.map(async (item) => {
         const productId = extractProductId(item);
-        // Add both the ID and item reference for debugging
-        return { 
-          id: productId, 
-          itemRef: typeof item.product === 'object' ? 'object' : typeof item.product 
-        };
+        try {
+          // Fetch complete product details including color variants
+          const productResponse = await getProductById(productId);
+          const productData = productResponse?.data;
+          
+          if (!productData) {
+            console.warn(`Could not fetch details for product ID: ${productId}`);
+            return null;
+          }
+          
+          // Get the first available color variant if none specified
+          let colorVariant = null;
+          
+          // 1. Try to use the specified color from cart item
+          if (item.colorVariant?.color?.name || item.color) {
+            const colorName = item.colorVariant?.color?.name || item.color?.name || item.colorName || item.color;
+            
+            // Look for a matching color in the product's color variants
+            if (productData.colorVariants && productData.colorVariants.length > 0) {
+              colorVariant = productData.colorVariants.find(variant => 
+                variant.color?.name?.toLowerCase() === colorName?.toLowerCase()
+              );
+            }
+          }
+          
+          // 2. If no color match found, use the first available color variant
+          if (!colorVariant && productData.colorVariants && productData.colorVariants.length > 0) {
+            colorVariant = productData.colorVariants[0];
+            console.log(`Using first available color variant for product ${productData.name}: ${colorVariant.color?.name}`);
+          }
+          
+          // Get size information
+          const sizeName = typeof item.size === 'object' ? item.size.name : (item.sizeName || item.size || '');
+          
+          return {
+            product: productId,
+            quantity: item.quantity || 1,
+            colorVariant: colorVariant ? {
+              color: {
+                name: colorVariant.color?.name || '',
+                hexCode: colorVariant.color?.hexCode || ''
+              }
+            } : null,
+            size: {
+              name: sizeName || '',
+              quantity: item.quantity || 1
+            },
+            originalItem: item,
+            productData
+          };
+        } catch (error) {
+          console.error(`Error fetching product details for ID ${productId}:`, error);
+          return null;
+        }
       });
-      console.log('Product IDs being used in order:', productIds);
+      
+      const enrichedItems = (await Promise.all(productDetailsPromises)).filter(item => item !== null);
+      
+      // Check if we have valid items to proceed
+      if (enrichedItems.length === 0) {
+        throw new Error('Failed to retrieve valid product information for any items in your cart.');
+      }
+      
+      // Check for items without color variants
+      const itemsWithoutColors = enrichedItems.filter(item => !item.colorVariant);
+      if (itemsWithoutColors.length > 0) {
+        const productNames = itemsWithoutColors.map(item => item.productData?.name || 'Unknown product').join(', ');
+        throw new Error(`The following products don't have valid color variants: ${productNames}. Please remove them or select a different color.`);
+      }
       
       // Format order data according to backend requirements
       const orderData = {
-        items: validCartItems.map(item => {
-          const productId = extractProductId(item);
-          console.log(`Adding product ID ${productId} to order (from item with structure: ${JSON.stringify({
-            hasProductObject: typeof item.product === 'object',
-            hasProductId: Boolean(item.productId),
-            hasItemId: Boolean(item._id)
-          })})`);
-          
-          return {
-            product: productId, // The product field must contain a valid MongoDB ID
-            quantity: item.quantity || 1
-          };
-        }),
+        items: enrichedItems.map(item => ({
+          product: item.product,
+          quantity: item.quantity,
+          colorVariant: item.colorVariant,
+          size: item.size
+        })),
         shippingAddress: {
           street: formData.address,
           city: formData.city,
@@ -775,11 +794,13 @@ const Checkout = () => {
       setOrderId(extractedOrderId);
       setOrderComplete(true);
       
+      // Clear cart before navigation
+      console.log('Clearing cart before navigation...');
+      await clearCartAfterOrderSuccess();
+      console.log('Cart cleared successfully');
+      
       // Handle order completion and navigation
       await handleOrderCompletion(extractedOrderId);
-      
-      // Clear cart after successful order
-      await clearCartAfterOrderSuccess();
       
     } catch (err) {
       console.error('Error placing order:', err);
@@ -854,8 +875,8 @@ const Checkout = () => {
         const mockOrderId = 'MOCK' + Date.now().toString(36).substring(4).toUpperCase();
         setOrderId(mockOrderId);
         setOrderComplete(true);
-        await handleOrderCompletion(mockOrderId);
         await clearCartAfterOrderSuccess();
+        await handleOrderCompletion(mockOrderId);
       }
     } finally {
       setSubmitting(false);
@@ -1074,12 +1095,12 @@ const Checkout = () => {
       <div className="checkout-header">
         <h1>Checkout</h1>
         <div className="checkout-steps">
-          <div className={`step ${currentStep >= 1 ? 'active' : ''} ${currentStep > 1 ? 'completed' : ''}`}>
+          <div className={`step ${currentStep >= 1 ? 'active' : ''}`}>
             <div className="step-number">1</div>
             <div className="step-label">Shipping</div>
           </div>
           <div className="step-divider"></div>
-          <div className={`step ${currentStep >= 2 ? 'active' : ''} ${currentStep > 2 ? 'completed' : ''}`}>
+          <div className={`step ${currentStep >= 2 ? 'active' : ''}`}>
             <div className="step-number">2</div>
             <div className="step-label">Payment</div>
           </div>
@@ -1091,252 +1112,129 @@ const Checkout = () => {
         </div>
       </div>
 
-      <div className="checkout-content checkout-content--centered">
+      <div className="checkout-content">
         <div className="checkout-main">
-          {/* Step 1: Shipping Information */}
+          {/* Shipping Form */}
           {currentStep === 1 && (
-            <ShippingForm
-              initialValues={formData}
-              onSubmit={(shippingData) => {
-                // Update form data with shipping information
-                setFormData(prevFormData => ({
-                  ...prevFormData,
-                  ...shippingData
-                }));
-                // Move to next step
-                handleNextStep({ preventDefault: () => {} });
-              }}
-              onBack={() => navigate('/cart')}
-              calculateTotal={calculateTotal}
-              formatPrice={formatPrice}
-            />
+            <div className="checkout-step">
+              <h2>
+                <FontAwesomeIcon icon={faTruck} />
+                Shipping Information
+              </h2>
+              <ShippingForm 
+                formData={formData}
+                onInputChange={handleInputChange}
+                onSubmit={handleNextStep}
+                onBack={() => navigate('/cart')}
+              />
+            </div>
           )}
 
-          {/* Step 2: Payment Information */}
+          {/* Payment Form */}
           {currentStep === 2 && (
             <div className="checkout-step checkout-step--payment">
               <h2>
                 <FontAwesomeIcon icon={faCreditCard} />
                 Payment Method
               </h2>
-              <div className="payment-container">
-                <PaymentForm
-                  amount={calculateTotal()}
-                  onPaymentComplete={handlePaymentComplete}
-                  onCancel={() => {
-                    // Allow user to go back
-                    handlePreviousStep();
-                  }}
-                  loading={submitting}
-                />
-              </div>
+              <PaymentForm 
+                amount={calculateTotal()}
+                onPaymentComplete={handlePaymentComplete}
+                onCancel={handlePreviousStep}
+                loading={submitting}
+              />
             </div>
           )}
 
-          {/* Step 3: Order Review */}
+          {/* Order Review */}
           {currentStep === 3 && (
-            <div className="checkout-step checkout-step--review">
+            <div className="checkout-step">
               <h2>
                 <FontAwesomeIcon icon={faCheckCircle} />
-                Review Your Order
+                Review Order
               </h2>
-              
+              {/* Review content */}
               <div className="review-section">
-                <h3>Shipping Information</h3>
+                <h3>Shipping Details</h3>
                 <div className="review-data">
-                  <p><strong>{formData.fullName}</strong></p>
+                  <p>{formData.fullName}</p>
+                  <p>{formData.email}</p>
+                  <p>{formData.phone}</p>
                   <p>{formData.address}</p>
                   <p>{formData.city}, {formData.state} {formData.zipCode}</p>
                   <p>{formData.country}</p>
-                  <p>{formData.phone}</p>
-                  <p>{formData.email}</p>
                 </div>
-                <button
-                  type="button"
-                  className="edit-button"
-                  onClick={() => setCurrentStep(1)}
-                >
-                  Edit
-                </button>
               </div>
-              
+
               <div className="review-section">
                 <h3>Payment Method</h3>
                 <div className="review-data">
-                  {formData.paymentMethod === 'cod' && (
-                    <p><strong>Cash on Delivery</strong></p>
-                  )}
-                  {formData.paymentMethod === 'bkash' && (
+                  <p>{formData.paymentMethod === 'cash-on-delivery' ? 'Cash on Delivery' : 'Mobile Banking'}</p>
+                  {formData.paymentMethod === 'mobile-banking' && (
                     <>
-                      <p><strong>bKash Payment</strong></p>
-                      <p>Your bKash Number: {formData.mobileNumber}</p>
+                      <p>Mobile Number: {formData.mobileNumber}</p>
                       <p>Transaction ID: {formData.transactionId}</p>
-                      <p className="review-data__merchant">Merchant Number: 01701234567</p>
-                      <div className="review-data__verification">
-                        <div className="review-data__verification-icon">
-                          <FontAwesomeIcon icon={faCheckCircle} />
-                        </div>
-                        <span>Transaction will be verified before processing</span>
-                      </div>
-                    </>
-                  )}
-                  {formData.paymentMethod === 'nagad' && (
-                    <>
-                      <p><strong>Nagad Payment</strong></p>
-                      <p>Your Nagad Number: {formData.mobileNumber}</p>
-                      <p>Transaction ID: {formData.transactionId}</p>
-                      <p className="review-data__merchant">Merchant Number: 01801234567</p>
-                      <div className="review-data__verification">
-                        <div className="review-data__verification-icon">
-                          <FontAwesomeIcon icon={faCheckCircle} />
-                        </div>
-                        <span>Transaction will be verified before processing</span>
-                      </div>
                     </>
                   )}
                 </div>
-                <button
-                  type="button"
-                  className="edit-button"
-                  onClick={() => setCurrentStep(2)}
-                >
-                  Edit
-                </button>
               </div>
-              
-              <div className="review-section">
-                <h3>Order Items ({cartItems.length})</h3>
-                <div className="review-items">
-                  {cartItems.map((item, index) => (
-                    <div key={index} className="review-item">
-                      <div className="review-item-image">
-                        <img src={item.image || 'https://via.placeholder.com/60'} alt={item.name} />
-                      </div>
-                      <div className="review-item-details">
-                        <h4>{item.name}</h4>
-                        <div className="review-item-meta">
-                          {item.color && <span className="meta-item">Color: {item.color}</span>}
-                          {item.size && <span className="meta-item">Size: {item.size}</span>}
-                          <span className="meta-item">Qty: {item.quantity}</span>
-                          <span className="meta-item">Unit Price: {formatPrice(item.price)}</span>
-                        </div>
-                      </div>
-                      <div className="review-item-price">
-                        {formatPrice(item.price * item.quantity)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="order-summary review-summary">
-                <div className="summary-subtotal summary-row">
-                  <span>Subtotal</span>
-                  <span>{formatPrice(calculateSubtotal())}</span>
-                </div>
-                <div className="summary-tax summary-row">
-                  <span>Tax (5%)</span>
-                  <span>{formatPrice(calculateTax())}</span>
-                </div>
-                <div className="summary-shipping summary-row">
-                  <span>Shipping</span>
-                  <span>
-                    {calculateShipping() === 0 ? 'Free' : formatPrice(calculateShipping())}
-                  </span>
-                </div>
-                <div className="summary-total summary-row">
-                  <span>Total</span>
-                  <span>{formatPrice(calculateTotal())}</span>
-                </div>
-              </div>
-              
-              <div className="order-notes">
-                <h3>Order Notes (Optional)</h3>
-                <textarea
-                  name="notes"
-                  value={formData.notes}
-                  onChange={handleInputChange}
-                  placeholder="Add any special instructions or delivery notes"
-                  rows="3"
-                ></textarea>
-              </div>
-              
+
               <div className="form-actions">
-                <button
-                  type="button"
+                <button 
+                  type="button" 
                   className="secondary-button"
                   onClick={handlePreviousStep}
                 >
-                  <FontAwesomeIcon icon={faArrowLeft} /> Back to Payment
+                  <FontAwesomeIcon icon={faArrowLeft} />
+                  Back
                 </button>
-                <button
-                  type="button"
+                <button 
+                  type="button" 
                   className="primary-button"
-                  onClick={async (e) => {
-                    // Store a reference to the cart items for the order completion screen
-                    const currentItems = [...cartItems];
-                    
-                    // Process the order
-                    await handleSubmitOrder(e);
-                    
-                    // Ensure cart is cleared after a short delay
-                    if (orderComplete || document.querySelector('.order-complete')) {
-                      console.log('Order confirmed complete, forcing final cart clear');
-                      setTimeout(() => {
-                        clearCartAfterOrderSuccess();
-                        
-                        // Force a UI update
-                        try {
-                          // Update header cart count if it exists
-                          const cartCountElement = document.querySelector('.cart-count');
-                          if (cartCountElement) cartCountElement.textContent = '0';
-                          
-                          // Broadcast another clear event
-                          window.dispatchEvent(new CustomEvent('cartCleared', { 
-                            detail: { source: 'checkout-button', timestamp: new Date().toISOString() } 
-                          }));
-                          
-                          console.log('Forced cart clear and UI update after order placement');
-                        } catch (e) {
-                          console.warn('Error during forced UI cart update:', e);
-                        }
-                      }, 1000); // Short delay to ensure order is fully processed
-                    }
-                  }}
+                  onClick={handleSubmitOrder}
                   disabled={submitting}
                 >
                   {submitting ? (
                     <>
-                      <FontAwesomeIcon icon={faSpinner} spin /> Processing...
+                      <FontAwesomeIcon icon={faSpinner} spin />
+                      Processing...
                     </>
                   ) : (
-                    'Place Order'
+                    <>
+                      Place Order
+                      <FontAwesomeIcon icon={faShoppingCart} />
+                    </>
                   )}
                 </button>
               </div>
             </div>
           )}
         </div>
-        
-        {/* Order Summary Sidebar */}
-        <div className="checkout-sidebar">
-          <OrderSummary 
-            items={cartItems}
-            subtotal={Number(calculateSubtotal())}
-            shipping={Number(calculateShipping())}
-            tax={Number(calculateTax())}
-            discount={0}
-            total={Number(calculateTotal())}
-          />
-          
-          <div className="checkout-security">
-            <FontAwesomeIcon icon={faShield} />
-            <p>
-              Your data is protected with industry-standard encryption.
-              We do not store your full payment details.
-            </p>
-          </div>
-        </div>
+
+        {/* Order Summary */}
+        <OrderSummary
+          items={cartItems.map(item => ({
+            id: item.productId,
+            name: item.name,
+            price: item.basePrice || item.price || 0,
+            quantity: typeof item.quantity === 'string' ? parseInt(item.quantity) : item.quantity,
+            color: item.color,
+            size: typeof item.size === 'object' ? item.size.name : (item.size || '')
+          }))}
+          subtotal={calculateSubtotal()}
+          shipping={calculateShipping(calculateSubtotal())}
+          tax={calculateTax(calculateSubtotal())}
+          total={calculateTotal()}
+          showItems={true}
+          showDiscount={false}
+          showDetails={true}
+        />
+      </div>
+
+      {/* Security Note */}
+      <div className="secure-payment-note">
+        <FontAwesomeIcon icon={faShield} />
+        <p>Your data is protected with industry-standard encryption. We do not store your full payment details.</p>
       </div>
     </div>
   );

@@ -39,17 +39,12 @@ const ShippingForm = ({
 
   // Reset form when initialValues change
   useEffect(() => {
-    setFormData({
-      fullName: '',
-      email: '',
-      phone: '',
-      address: '',
-      city: '',
-      state: '',
-      zipCode: '',
-      country: 'Bangladesh',
-      ...initialValues,
-    });
+    if (initialValues && Object.keys(initialValues).length > 0) {
+      setFormData(prevData => ({
+        ...prevData,
+        ...initialValues
+      }));
+    }
   }, [initialValues]);
 
   // Handle form input changes
@@ -161,8 +156,8 @@ const ShippingForm = ({
       return;
     }
     
-    // Call the onSubmit prop with form data
-    onSubmit(formData);
+    // Call the onSubmit prop with the event and form data
+    onSubmit(e, formData);
   };
 
   // Field styles

@@ -105,7 +105,7 @@ const ShoppingCart = () => {
   // Calculate shipping (example logic)
   const calculateShipping = () => {
     const subtotal = calculateSubtotal();
-    // Free shipping over $50, otherwise $5.99
+    // Free shipping over ৳50, otherwise ৳5.99
     return subtotal > 50 ? 0 : 5.99;
   };
   
@@ -116,30 +116,10 @@ const ShoppingCart = () => {
   
   // Safe price formatter function
   const formatPrice = (price) => {
-    try {
-      if (price === undefined || price === null) {
-        return '$0.00';
-      }
-      
-      const numPrice = typeof price === 'string' ? parseFloat(price) : price;
-      
-      if (isNaN(numPrice) || numPrice < 0) {
-        return '$0.00';
-      }
-      
-      // Round to 2 decimal places and format as string
-      const roundedPrice = (Math.round(numPrice * 100) / 100)
-        .toString()
-        .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-        
-      // Ensure there are 2 decimal places
-      const parts = roundedPrice.split('.');
-      const formattedPrice = parts[0] + '.' + (parts[1] ? parts[1].padEnd(2, '0') : '00');
-      return `$${formattedPrice}`;
-    } catch (err) {
-      console.error('Error formatting price:', err);
-      return '$0.00';
+    if (typeof price !== 'number' || isNaN(price)) {
+      return '৳0.00';
     }
+    return `৳${price.toFixed(2)}`;
   };
   
   // Navigate to checkout

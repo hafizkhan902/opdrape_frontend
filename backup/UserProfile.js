@@ -603,8 +603,8 @@ const UserProfile = () => {
                           <p className="product-price">
                             {item.quantity || 1} x {
                               typeof item.price === 'number' 
-                                ? `$${item.price.toFixed(2)}` 
-                                : `$${parseFloat(item.price || 0).toFixed(2)}`
+                                ? `৳${item.price.toFixed(2)}` 
+                                : `৳${parseFloat(item.price || 0).toFixed(2)}`
                             }
                           </p>
                         </div>
@@ -620,21 +620,21 @@ const UserProfile = () => {
                     <div className="order-totals">
                       <div className="total-item">
                         <span>Subtotal:</span>
-                        <span>${typeof order.subtotal === 'number' ? order.subtotal.toFixed(2) : parseFloat(order.subtotal || 0).toFixed(2)}</span>
+                        <span>৳{typeof order.subtotal === 'number' ? order.subtotal.toFixed(2) : parseFloat(order.subtotal || 0).toFixed(2)}</span>
                       </div>
                       <div className="total-item">
                         <span>Shipping:</span>
-                        <span>${typeof order.shippingCost === 'number' ? order.shippingCost.toFixed(2) : parseFloat(order.shippingCost || 0).toFixed(2)}</span>
+                        <span>৳{typeof order.shippingCost === 'number' ? order.shippingCost.toFixed(2) : parseFloat(order.shippingCost || 0).toFixed(2)}</span>
                       </div>
                       {(order.tax > 0 || typeof order.tax === 'undefined') && (
                         <div className="total-item">
                           <span>Tax:</span>
-                          <span>${typeof order.tax === 'number' ? order.tax.toFixed(2) : parseFloat(order.tax || 0).toFixed(2)}</span>
+                          <span>৳{typeof order.tax === 'number' ? order.tax.toFixed(2) : parseFloat(order.tax || 0).toFixed(2)}</span>
                         </div>
                       )}
                       <div className="total-item total">
                         <span>Total:</span>
-                        <span>${typeof order.total === 'number' ? order.total.toFixed(2) : parseFloat(order.total || 0).toFixed(2)}</span>
+                        <span>৳{typeof order.total === 'number' ? order.total.toFixed(2) : parseFloat(order.total || 0).toFixed(2)}</span>
                       </div>
                     </div>
                     

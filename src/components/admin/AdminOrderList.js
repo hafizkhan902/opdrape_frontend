@@ -154,7 +154,7 @@ const AdminOrderList = () => {
 
   // Format currency for display
   const formatCurrency = (amount) => {
-    if (amount === undefined || amount === null) return '$0.00';
+    if (amount === undefined || amount === null) return '৳0.00';
     
     return new Intl.NumberFormat('en-US', {
       style: 'currency',

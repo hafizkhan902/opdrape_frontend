@@ -1,0 +1,11 @@
+.admin-reviews-container {
+  width: 100%;
+  max-width: 1400px;
+  padding: 15px;
+}
+
+@media (max-width: 768px) {
+  .admin-reviews-container {
+    padding: 10px;
+  }
+} 

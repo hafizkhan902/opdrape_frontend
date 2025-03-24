@@ -220,14 +220,13 @@ const ProductCard = ({ product, inWishlist = false }) => {
         </div>
         
         <div className="product-price">
-          {formattedDiscountPrice ? (
+          {discount > 0 ? (
             <>
-              <span className="current-price">${formattedDiscountPrice}</span>
-              <span className="original-price">${formattedOriginalPrice}</span>
-              <span className="discount-percentage">-{discount}%</span>
+              <span className="current-price">৳{formattedDiscountPrice}</span>
+              <span className="original-price">৳{formattedOriginalPrice}</span>
             </>
           ) : (
-            <span className="current-price">${formattedOriginalPrice}</span>
+            <span className="current-price">৳{formattedOriginalPrice}</span>
           )}
         </div>
       </div>

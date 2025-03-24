@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getAdminUsers, deleteUser } from '../../../services/api';
+import { getAdminUsers, deleteUser, getUserOrdersById } from '../../../services/api';
 import { FaEdit, FaTrash, FaPlus, FaSearch, FaSort, FaSortUp, FaSortDown } from 'react-icons/fa';
 import './CustomerList.css';
 
@@ -55,8 +55,40 @@ const CustomerList = () => {
         }
       }
       
+      // Fetch order counts for each user
+      const usersWithOrderCount = await Promise.all(
+        usersList.map(async (user) => {
+          const userId = user.id || user._id;
+          try {
+            // Get user orders
+            const ordersResponse = await getUserOrdersById(userId);
+            let orderCount = 0;
+            
+            // Extract order count from response
+            if (ordersResponse?.data) {
+              if (Array.isArray(ordersResponse.data)) {
+                orderCount = ordersResponse.data.length;
+              } else if (ordersResponse.data.orders && Array.isArray(ordersResponse.data.orders)) {
+                orderCount = ordersResponse.data.orders.length;
+              } else if (ordersResponse.data.count) {
+                orderCount = ordersResponse.data.count;
+              }
+            }
+            
+            return {
+              ...user,
+              orderCount
+            };
+          } catch (error) {
+            console.error(`Error fetching orders for user ${userId}:`, error);
+            // Return the user without order count if there's an error
+            return user;
+          }
+        })
+      );
+      
       // Apply default sorting
-      const sortedUsers = sortData(usersList, sortConfig.key, sortConfig.direction);
+      const sortedUsers = sortData(usersWithOrderCount, sortConfig.key, sortConfig.direction);
       
       setCustomers(sortedUsers);
       setFilteredCustomers(sortedUsers);

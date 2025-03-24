@@ -103,6 +103,55 @@ const OrderHistory = () => {
       console.log('Unusual order data structure:', order);
     }
     
+    // Helper function to extract product image from various sources
+    const getProductImage = (item) => {
+      // If item has a product object with colorVariants
+      if (item.product && typeof item.product === 'object') {
+        // First check for colorVariants array
+        if (item.product.colorVariants && 
+            Array.isArray(item.product.colorVariants) && 
+            item.product.colorVariants.length > 0) {
+          
+          const colorVariant = item.product.colorVariants[0];
+          
+          // Check if colorVariant has images array
+          if (colorVariant.images && Array.isArray(colorVariant.images) && colorVariant.images.length > 0) {
+            const imageData = colorVariant.images[0];
+            
+            // Handle string or object image data
+            if (typeof imageData === 'string') {
+              return imageData;
+            } else if (imageData && typeof imageData === 'object') {
+              return imageData.url || imageData.src || imageData.path || '';
+            }
+          }
+        }
+        
+        // Also check for a single colorVariant object (not in array)
+        if (item.product.colorVariant) {
+          if (item.product.colorVariant.images && item.product.colorVariant.images.length > 0) {
+            const imageData = item.product.colorVariant.images[0];
+            return typeof imageData === 'string' 
+              ? imageData 
+              : (imageData.url || imageData.src || imageData.path || '');
+          }
+        }
+        
+        // Fallback to direct image properties on the product
+        if (item.product.image) return item.product.image;
+        if (item.product.mainImage) return item.product.mainImage;
+        if (item.product.imageUrl) return item.product.imageUrl;
+      }
+      
+      // If item itself has image properties
+      if (item.image) return item.image;
+      if (item.imageUrl) return item.imageUrl;
+      if (item.imgUrl) return item.imgUrl;
+      
+      // Last resort fallback to a placeholder
+      return 'https://via.placeholder.com/80x80';
+    };
+    
     // Normalize order data
     return {
       id: order.id || order._id || order.orderId || `order-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -132,9 +181,9 @@ const OrderHistory = () => {
           quantity: parseInt(item.quantity || item.qty || 1),
           price: parseFloat(item.price || item.unit_price || 0),
           name: itemName,
-          image: item.image || item.imageUrl || item.imgUrl || item.product?.image || 'https://via.placeholder.com/80x80',
+          image: getProductImage(item),
           color: item.color || item.variant_color || item.variant?.color || item.attributes?.color || '',
-          size: item.size || item.variant_size || item.variant?.size || item.attributes?.size || '',
+          size: typeof item.size === 'object' ? item.size.name : (item.size || item.variant_size || item.variant?.size || item.attributes?.size || ''),
         };
       }) : [],
       
@@ -510,9 +559,9 @@ const OrderHistory = () => {
                       </span>
                       {(item.color || item.size) && (
                         <span className="product-variant">
-                          {item.color && item.size ? `${item.color}, ${item.size}` : 
+                          {item.color && item.size ? `${item.color}, ${typeof item.size === 'object' ? item.size.name : item.size}` : 
                            item.color ? item.color : 
-                           item.size ? item.size : ''}
+                           item.size ? (typeof item.size === 'object' ? item.size.name : item.size) : ''}
                         </span>
                       )}
                     </div>

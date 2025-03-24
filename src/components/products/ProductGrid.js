@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useParams } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFilter, faTimes, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { getProducts, getProductsByCategory, searchProducts } from '../../services/api';
@@ -15,9 +15,18 @@ const ProductGrid = ({
   searchQuery = null,
   initialFilters = {},
   initialSortOption = 'popularity',
-  showFilters = true,
-  wishlistItems = []
+  showFilters: propShowFilters = true,
+  wishlistItems = [],
+  customFetch = null
 }) => {
+  // Get category from URL params if not provided as prop
+  const { category: categoryParam } = useParams();
+  const effectiveCategory = category || categoryParam;
+  
+  // Determine if filters should be shown
+  // Don't show filters on category pages
+  const showFilters = effectiveCategory ? false : propShowFilters;
+  
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -80,9 +89,12 @@ const ProductGrid = ({
       try {
         let response;
 
-        if (category) {
+        // Use customFetch if provided
+        if (customFetch) {
+          response = await customFetch(queryParams);
+        } else if (effectiveCategory) {
           // Fetch products by category
-          response = await getProductsByCategory(category, queryParams);
+          response = await getProductsByCategory(effectiveCategory, queryParams);
         } else if (searchQuery) {
           // Search products
           response = await searchProducts({ 
@@ -97,6 +109,25 @@ const ProductGrid = ({
         // Debug log to check product data structure
         console.log('Product data received:', response.data.products);
         
+        // Ensure we have products array (defensive coding)
+        if (!response.data.products) {
+          console.warn('No products array in response, checking for alternative formats');
+          
+          // If the response data is directly an array, use that
+          if (Array.isArray(response.data)) {
+            console.log('Using response.data as products array');
+            response.data = { 
+              products: response.data,
+              total: response.data.length
+            };
+          }
+          // If no products array can be found, create an empty one
+          else {
+            console.warn('Could not find products array in response, using empty array');
+            response.data = { products: [], total: 0 };
+          }
+        }
+        
         // Check for products with missing IDs (check for MongoDB _id too)
         const productsWithMissingIds = response.data.products.filter(p => !p._id && !p.id && !p.slug);
         if (productsWithMissingIds.length > 0) {
@@ -110,7 +141,7 @@ const ProductGrid = ({
         }
 
         setProducts(response.data.products);
-        setTotalProducts(response.data.total);
+        setTotalProducts(response.data.total || response.data.products.length);
         
         // Set available filters from API response if present
         if (response.data.availableFilters) {
@@ -118,15 +149,19 @@ const ProductGrid = ({
         }
         
       } catch (err) {
-        setError('Failed to load products. Please try again later.');
         console.error('Error fetching products:', err);
+        setError('Failed to load products. Please try again later.');
+        
+        // Set empty products array as fallback
+        setProducts([]);
+        setTotalProducts(0);
       } finally {
         setLoading(false);
       }
     };
 
     fetchProducts();
-  }, [category, searchQuery, page, limit, sortOption, filters]);
+  }, [effectiveCategory, searchQuery, page, limit, sortOption, filters, customFetch]);
 
   // Load filters and sort from URL on initial load
   useEffect(() => {
@@ -311,8 +346,8 @@ const ProductGrid = ({
               onChange={e => handleFilterChange('maxPrice', e.target.value)}
             />
             <div className="price-labels">
-              <span>$0</span>
-              <span>${filters.maxPrice || MAX_PRICE_FILTER}</span>
+              <span>৳0</span>
+              <span>৳{filters.maxPrice || MAX_PRICE_FILTER}</span>
             </div>
           </div>
         </div>
@@ -351,23 +386,41 @@ const ProductGrid = ({
     );
   };
 
+  const formatPrice = (price) => {
+    if (typeof price !== 'number' || isNaN(price)) {
+      return '৳0';
+    }
+    return `৳${price.toFixed(2)}`;
+  };
+
+  // Format category name for display (capitalize, replace hyphens with spaces)
+  const formatCategoryName = (category) => {
+    if (!category) return '';
+    return category
+      .split('-')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
+  // Get display title 
+  const displayTitle = title || (effectiveCategory ? `${formatCategoryName(effectiveCategory)} Collection` : 'All Products');
+
   return (
     <div className="product-grid-container">
       <div className="product-grid-header">
-        <h2 className="product-grid-title">{title}</h2>
+        {showFilters && (
+          <button 
+            className="mobile-filter-toggle"
+            onClick={() => setShowMobileFilters(!showMobileFilters)}
+          >
+            <FontAwesomeIcon icon={showMobileFilters ? faTimes : faFilter} />
+            {showMobileFilters ? 'Close Filters' : 'Filters'}
+          </button>
+        )}
+        
+        {displayTitle && <h2 className="product-grid-title">{displayTitle}</h2>}
         
         <div className="product-grid-actions">
-          {/* Mobile Filter Toggle */}
-          {showFilters && (
-            <Button 
-              variant="outline" 
-              className="filter-toggle" 
-              onClick={() => setShowMobileFilters(true)}
-            >
-              <FontAwesomeIcon icon={faFilter} /> Filters
-            </Button>
-          )}
-          
           {/* Sort Dropdown */}
           <div className="sort-container">
             <label htmlFor="sort-select">Sort by:</label>
@@ -469,7 +522,8 @@ ProductGrid.propTypes = {
   initialFilters: PropTypes.object,
   initialSortOption: PropTypes.string,
   showFilters: PropTypes.bool,
-  wishlistItems: PropTypes.array
+  wishlistItems: PropTypes.array,
+  customFetch: PropTypes.func
 };
 
 export default ProductGrid; 

@@ -445,109 +445,53 @@ const CustomerDetail = () => {
         ) : orders.length === 0 ? (
           <div className="no-orders-message">No orders found for this customer.</div>
         ) : (
-          <div className="orders-list">
-            {orders.map((order) => {
-              // Generate a unique ID for the order if not present
-              const orderId = order._id || order.id || `order-${Math.random().toString(36).substring(2, 9)}`;
-              // Calculate order total
-              const orderTotal = order.totalAmount || order.total || 
-                (order.items && order.items.reduce((sum, item) => {
-                  const price = item.price || (item.product && item.product.price) || 0;
-                  const quantity = item.quantity || 1;
-                  return sum + (price * quantity);
-                }, 0));
-              
-              return (
-                <div key={orderId} className="order-card">
-                  <div className="order-header">
-                    <div className="order-basic-info">
-                      <div className="order-id">
-                        <span className="label">Order ID:</span> {orderId}
-                      </div>
-                      <div className="order-date">
-                        <span className="label">Date:</span> {formatDate(order.createdAt || order.date)}
-                      </div>
-                    </div>
-                    <div className="order-status-price">
-                      <div className={`order-status status-${order.status?.toLowerCase() || 'processing'}`}>
-                        {order.status || 'Processing'}
-                      </div>
-                      <div className="order-total">
-                        <span className="label">Total:</span> ${(orderTotal / 100).toFixed(2)}
-                      </div>
-                    </div>
-                  </div>
+          <div className="orders-table-container">
+            <table className="orders-table">
+              <thead>
+                <tr>
+                  <th>Order ID</th>
+                  <th>Date</th>
+                  <th>Total</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map((order) => {
+                  // Generate a unique ID for the order if not present
+                  const orderId = order._id || order.id || `order-${Math.random().toString(36).substring(2, 9)}`;
                   
-                  <div className="order-details">
-                    <div className="order-items-section">
-                      <h4>Items</h4>
-                      {order.items && order.items.length > 0 ? (
-                        <table className="order-items-table">
-                          <thead>
-                            <tr>
-                              <th>Product</th>
-                              <th>Quantity</th>
-                              <th>Price</th>
-                              <th>Subtotal</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {order.items.map((item, index) => {
-                              const productName = item.name || 
-                                (item.product && (item.product.name || item.product.title)) || 
-                                `Product #${index + 1}`;
-                              const productPrice = item.price || 
-                                (item.product && item.product.price) || 0;
-                              const quantity = item.quantity || 1;
-                              const subtotal = productPrice * quantity;
-                              
-                              return (
-                                <tr key={index}>
-                                  <td>{productName}</td>
-                                  <td>{quantity}</td>
-                                  <td>${(productPrice / 100).toFixed(2)}</td>
-                                  <td>${(subtotal / 100).toFixed(2)}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      ) : (
-                        <p>No items found in this order.</p>
-                      )}
-                    </div>
-                    
-                    <div className="order-details-columns">
-                      <div className="order-shipping-info">
-                        <h4>Shipping Address</h4>
-                        <p>{formatAddress(order.shippingAddress)}</p>
-                      </div>
-                      
-                      <div className="order-payment-info">
-                        <h4>Payment Information</h4>
-                        <p><strong>Method:</strong> {order.paymentMethod || 'Not specified'}</p>
-                        {order.paymentDetails && (
-                          <div className="payment-details">
-                            {order.paymentDetails.transactionId && (
-                              <p><strong>Transaction ID:</strong> {order.paymentDetails.transactionId}</p>
-                            )}
-                            {order.paymentDetails.paymentNumber && (
-                              <p><strong>Payment Number:</strong> {order.paymentDetails.paymentNumber}</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div className="order-actions">
-                      <Link to={`/admin/orders/${orderId}`} className="view-order-btn">
-                        View Order Details
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                  // Calculate order total
+                  const orderTotal = order.totalAmount || order.total || 
+                    (order.items && order.items.reduce((sum, item) => {
+                      const price = item.price || (item.product && item.product.price) || 0;
+                      const quantity = item.quantity || 1;
+                      return sum + (price * quantity);
+                    }, 0));
+                  
+                  return (
+                    <tr key={orderId}>
+                      <td className="order-id-cell">{orderId}</td>
+                      <td>{formatDate(order.createdAt || order.date)}</td>
+                      <td className="order-total-cell">${parseFloat(orderTotal).toFixed(2)}</td>
+                      <td>
+                        <span className={`status-badge status-${order.status?.toLowerCase() || 'processing'}`}>
+                          {order.status || 'Processing'}
+                        </span>
+                      </td>
+                      <td>
+                        <Link 
+                          to={`/admin/orders/${orderId}`} 
+                          className="see-details-btn"
+                        >
+                          See Details
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

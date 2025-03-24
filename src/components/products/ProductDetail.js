@@ -38,6 +38,7 @@ const ProductDetail = () => {
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [addToCartLoading, setAddToCartLoading] = useState(false);
   const [showCartPopup, setShowCartPopup] = useState(false);
+  const [success, setSuccess] = useState(null);
 
   // Fetch product details
   useEffect(() => {
@@ -328,13 +329,46 @@ const ProductDetail = () => {
   const handleColorSelect = (index) => {
     setSelectedColorIndex(index);
     
-    // Reset size selection
+    // Reset size selection when color changes
     const newColorVariant = product.colorVariants[index];
+    setSelectedSize(null); // Reset size when color changes
+    
+    // Auto-select first available size if any
     if (newColorVariant.sizes && newColorVariant.sizes.length > 0) {
-      setSelectedSize(newColorVariant.sizes[0].name);
-    } else {
-      setSelectedSize(null);
+      const firstAvailableSize = newColorVariant.sizes.find(size => size.quantity > 0);
+      if (firstAvailableSize) {
+        setSelectedSize(firstAvailableSize.name);
+      }
     }
+  };
+
+  // Handle size selection
+  const handleSizeSelect = (sizeName) => {
+    if (isSizeInStock(sizeName)) {
+      setSelectedSize(sizeName);
+    }
+  };
+
+  // Validate before adding to cart
+  const validateSelection = () => {
+    const currentVariant = getCurrentColorVariant();
+    
+    if (!currentVariant) {
+      alert("Please select a color");
+      return false;
+    }
+    
+    if (currentVariant.sizes && currentVariant.sizes.length > 0 && !selectedSize) {
+      alert("Please select a size");
+      return false;
+    }
+    
+    if (!isProductAvailable()) {
+      alert("Selected combination is not available");
+      return false;
+    }
+    
+    return true;
   };
 
   // Handle quantity change
@@ -347,30 +381,10 @@ const ProductDetail = () => {
 
   // Safe price formatter that doesn't use toFixed
   const formatPrice = (price) => {
-    try {
-      if (price === undefined || price === null) {
-        return '$0.00';
-      }
-      
-      const numPrice = typeof price === 'string' ? parseFloat(price) : price;
-      
-      if (isNaN(numPrice) || numPrice < 0) {
-        return '$0.00';
-      }
-      
-      // Round to 2 decimal places and format as string
-      const roundedPrice = (Math.round(numPrice * 100) / 100)
-        .toString()
-        .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-        
-      // Ensure there are 2 decimal places
-      const parts = roundedPrice.split('.');
-      const formattedPrice = parts[0] + '.' + (parts[1] ? parts[1].padEnd(2, '0') : '00');
-      return `$${formattedPrice}`;
-    } catch (err) {
-      console.error('Error formatting price in ProductDetail:', err);
-      return '$0.00';
+    if (typeof price !== 'number' || isNaN(price)) {
+      return '৳0.00';
     }
+    return `৳${price.toFixed(2)}`;
   };
 
   // Calculate discount percentage
@@ -393,96 +407,73 @@ const ProductDetail = () => {
 
   // Handle add to cart
   const handleAddToCart = async () => {
-    if (!isAuthenticated) {
-      navigate('/login', { state: { from: `/product/${productId}` } });
-      return;
-    }
-    
-    // Only validate size if we have color variants with sizes
-    const currentVariant = getCurrentColorVariant();
-    
-    if (currentVariant && currentVariant.sizes && currentVariant.sizes.length > 0) {
-      if (!selectedSize) {
-        alert("Please select a size");
-        return;
-      }
-      
-      if (!isProductAvailable()) {
-        alert("Selected size is not available");
-        return;
-      }
-    }
-    
-    setAddToCartLoading(true);
-    
     try {
-      // Determine the product price to use
-      let productPrice = 0;
-      
-      // Use sale price if available, otherwise use base price or regular price
-      if (product.salePrice) {
-        productPrice = product.salePrice;
-      } else if (product.basePrice) {
-        productPrice = product.basePrice;
-      } else if (product.price) {
-        productPrice = product.price;
-      } else if (product.discountPrice) {
-        productPrice = product.discountPrice;
+      if (!selectedSize) {
+        setError('Please select a size');
+        return;
       }
-      
-      // Get original price for discount calculations
-      const originalPrice = product.basePrice || product.price || productPrice;
-      
-      // Create cart item based on whether we have color variants or not
-      let cartItem = {
-        productId: product._id || productId,
-        quantity,
-        price: productPrice,        // Include the price in the cart item
-        originalPrice: originalPrice // Include original price for discount display
+
+      const currentVariant = getCurrentColorVariant();
+      if (!currentVariant) {
+        setError('Please select a color');
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      // Get the product ID - use _id if available, otherwise use the URL productId
+      const productIdentifier = product._id || productId;
+
+      // Format the cart item data according to the required structure
+      const cartItemData = {
+        productId: productIdentifier,  // Use productId as the key
+        colorVariant: {
+          color: {
+            name: currentVariant.color.name,
+            hexCode: currentVariant.color.hexCode
+          }
+        },
+        size: {
+          name: selectedSize,
+          quantity: quantity
+        }
       };
+
+      console.log('Adding to cart:', cartItemData);
+      const response = await addToCart(cartItemData);
       
-      // Add color and size if available
-      if (currentVariant) {
-        cartItem = {
-          ...cartItem,
-          colorName: currentVariant.color.name,
-          colorHex: currentVariant.color.hexCode,
-          ...(selectedSize && { size: selectedSize })
+      // Show success message
+      setSuccess('Product added to cart successfully!');
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setSuccess(null);
+      }, 3000);
+
+      // Update cart if the function exists
+      if (updateCart && response.data) {
+        // Ensure we're passing the correct cart data structure
+        const cartData = {
+          items: response.data.items || [],
+          totalAmount: response.data.totalAmount || 0
         };
+        updateCart(cartData);
       }
+
+      // Show cart popup
+      setShowCartPopup(true);
       
-      console.log('Adding to cart with data:', cartItem);
-      console.log('Price details:', {
-        addedPrice: productPrice,
-        originalPrice: originalPrice,
-        productPrices: {
-          salePrice: product.salePrice,
-          basePrice: product.basePrice,
-          price: product.price,
-          discountPrice: product.discountPrice
-        }
-      });
-      
-      const response = await addToCart(cartItem);
-      
-      // Make sure we're updating the global cart state
-      if (updateCart) {
-        console.log("Updating global cart state with:", response.data);
-        updateCart(response.data);
-        
-        // Find cart icon in navbar and trigger a click to open cart popup
-        const cartIconBtn = document.querySelector('.navbar-icon.cart-icon');
-        if (cartIconBtn) {
-          cartIconBtn.click();
-        }
-      } else {
-        console.warn("updateCart function is not available in context");
-      }
-    } catch (err) {
-      console.error('Error adding to cart:', err);
-      alert("Failed to add product to cart");
+      // Hide cart popup after 3 seconds
+      setTimeout(() => {
+        setShowCartPopup(false);
+      }, 3000);
+
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      setError(error.message || 'Failed to add product to cart');
     } finally {
-      setAddToCartLoading(false);
+      setLoading(false);
     }
   };
 
@@ -529,219 +520,127 @@ const ProductDetail = () => {
       </div>
       
       <div className="product-detail-content">
-        {/* Product Images - Using our new ProductImages component */}
-        <ProductImages 
-          images={formatImagesForProductImagesComponent()} 
-          productName={product.name} 
-        />
+        <div className="product-images">
+          <ProductImages images={formatImagesForProductImagesComponent()} />
+        </div>
         
-        {/* Product Info */}
         <div className="product-info">
-          <div className="product-header">
-            {product.brand && <div className="product-brand">{product.brand}</div>}
-            <h1 className="product-name">{product.name}</h1>
-            
-            <div className="product-meta">
-              <div className="product-categories">
-                {product.category && <span className="product-category">{product.category}</span>}
-                {product.subCategory && <span className="product-subcategory">{product.subCategory}</span>}
-              </div>
-            </div>
-          </div>
+          <h1 className="product-title">{product.name}</h1>
           
-          {/* Product pricing */}
           <div className="product-price">
-            {product.basePrice && product.price && product.basePrice > product.price ? (
-              // Case 1: Modern pricing with basePrice > price (on sale)
+            {product.salePrice ? (
               <>
-                <span className="current-price">{formatPrice(product.price)}</span>
+                <span className="sale-price">{formatPrice(product.salePrice)}</span>
                 <span className="original-price">{formatPrice(product.basePrice)}</span>
-                <span className="discount-percent">
-                  {getDiscountPercentage()}% off
-                </span>
+                <span className="discount-badge">-{getDiscountPercentage()}%</span>
               </>
-            ) : product.discountPrice && product.price ? (
-              // Case 2: Legacy pricing with price and discountPrice
-              <>
-                <span className="current-price">{formatPrice(product.discountPrice)}</span>
-                <span className="original-price">{formatPrice(product.price)}</span>
-                <span className="discount-percent">
-                  {Math.round(((product.price - product.discountPrice) / product.price) * 100)}% off
-                </span>
-              </>
-            ) : product.salePrice && product.basePrice ? (
-              // Case 3: Another pricing format with salePrice and basePrice
-              <>
-                <span className="current-price">{formatPrice(product.salePrice)}</span>
-                <span className="original-price">{formatPrice(product.basePrice)}</span>
-                <span className="discount-percent">
-                  {Math.round(((product.basePrice - product.salePrice) / product.basePrice) * 100)}% off
-                </span>
-              </>
-            ) : product.price ? (
-              // Case 4: Simple pricing with just price
-              <span className="current-price">{formatPrice(product.price)}</span>
-            ) : product.basePrice ? (
-              // Case 5: Fallback to basePrice if price is missing
-              <span className="current-price">{formatPrice(product.basePrice)}</span>
             ) : (
-              // Case 6: No pricing information available
-              <span className="current-price">Price not available</span>
+              <span className="regular-price">{formatPrice(product.basePrice)}</span>
             )}
           </div>
           
-          <div className="product-description">
-            <p>{product.description}</p>
-          </div>
+          {error && <div className="error-message">{error}</div>}
+          {success && <div className="success-message">{success}</div>}
           
-          {/* Color variants selection */}
-          {product.colorVariants && product.colorVariants.length > 0 && (
-            <div className="product-colors">
-              <h3 className="variant-label">Color:</h3>
+          <div className="product-options">
+            {product.colorVariants && product.colorVariants.length > 0 && (
               <div className="color-options">
-                {product.colorVariants.map((variant, index) => (
-                  <div 
-                    key={index}
-                    className={`color-option ${selectedColorIndex === index ? 'selected' : ''}`}
-                    onClick={() => handleColorSelect(index)}
-                    style={{ backgroundColor: variant.color.hexCode || variant.color }}
-                    title={variant.color.name}
-                  >
-                    {selectedColorIndex === index && <span className="checkmark">✓</span>}
-                  </div>
-                ))}
-              </div>
-              <span className="selected-color-name">
-                {product.colorVariants[selectedColorIndex]?.color.name}
-              </span>
-            </div>
-          )}
-          
-          {/* Size selection */}
-          {getAvailableSizes().length > 0 && (
-            <div className="product-sizes">
-              <div className="size-header">
-                <h3 className="variant-label">Size:</h3>
-                <button className="size-guide-btn">Size Guide</button>
-              </div>
-              <div className="size-options">
-                {getAvailableSizes().map((size) => (
-                  <div 
-                    key={size.name}
-                    className={`size-option ${selectedSize === size.name ? 'selected' : ''} ${!isSizeInStock(size.name) ? 'out-of-stock' : ''}`}
-                    onClick={() => isSizeInStock(size.name) && setSelectedSize(size.name)}
-                  >
-                    {size.name}
-                    {!isSizeInStock(size.name) && <span className="out-of-stock-label">Out of stock</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          {/* Quantity selector */}
-          <div className="product-quantity">
-            <h3 className="variant-label">Quantity:</h3>
-            <div className="quantity-selector">
-              <button 
-                className="quantity-btn"
-                onClick={() => quantity > 1 && setQuantity(quantity - 1)}
-              >
-                -
-              </button>
-              <input 
-                type="number" 
-                min="1" 
-                max="99"
-                value={quantity}
-                onChange={handleQuantityChange}
-                className="quantity-input"
-              />
-              <button 
-                className="quantity-btn"
-                onClick={() => setQuantity(quantity + 1)}
-              >
-                +
-              </button>
-            </div>
-          </div>
-          
-          <div className="product-actions">
-            <Button 
-              variant="primary" 
-              fullWidth
-              onClick={handleAddToCart}
-              disabled={addToCartLoading || !isProductAvailable()}
-              loading={addToCartLoading}
-              className="add-to-cart-btn"
-            >
-              <FontAwesomeIcon icon={faShoppingCart} />
-              {isProductAvailable() ? 'Add to Cart' : 'Out of Stock'}
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              onClick={handleWishlistToggle}
-              disabled={wishlistLoading}
-              className="wishlist-btn"
-              aria-label={inWishlist ? "Remove from wishlist" : "Add to wishlist"}
-            >
-              <FontAwesomeIcon icon={inWishlist ? faHeart : farHeart} />
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                navigator.share({
-                  title: product.name,
-                  text: product.description,
-                  url: window.location.href
-                }).catch(err => console.error('Error sharing:', err));
-              }}
-              className="share-btn"
-              aria-label="Share this product"
-            >
-              <FontAwesomeIcon icon={faShare} />
-            </Button>
-          </div>
-          
-          {/* Product Details Section */}
-          <div className="product-details-section">
-            <h3 className="section-title">Product Details</h3>
-            
-            {product.features && product.features.length > 0 && (
-              <div className="product-features">
-                <h4><FontAwesomeIcon icon={faInfoCircle} /> Features</h4>
-                <ul>
-                  {product.features.map((feature, index) => (
-                    <li key={index}>{feature}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            
-            {product.careInstructions && product.careInstructions.length > 0 && (
-              <div className="product-care">
-                <h4><FontAwesomeIcon icon={faInfoCircle} /> Care Instructions</h4>
-                <ul>
-                  {product.careInstructions.map((instruction, index) => (
-                    <li key={index}>{instruction}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            
-            {product.tags && product.tags.length > 0 && (
-              <div className="product-tags">
-                <h4><FontAwesomeIcon icon={faTag} /> Tags</h4>
-                <div className="tags-list">
-                  {product.tags.map((tag, index) => (
-                    <span key={index} className="tag">{tag}</span>
+                <label>Color: <span className="selected-color">{getCurrentColorVariant()?.color?.name}</span></label>
+                <div className="color-swatches">
+                  {product.colorVariants.map((variant, index) => (
+                    <button
+                      key={variant.color.hexCode}
+                      className={`color-swatch ${selectedColorIndex === index ? 'selected' : ''}`}
+                      style={{ backgroundColor: variant.color.hexCode }}
+                      onClick={() => handleColorSelect(index)}
+                      title={variant.color.name}
+                      aria-label={`Select ${variant.color.name} color`}
+                    >
+                      {selectedColorIndex === index && <span className="check-mark">✓</span>}
+                    </button>
                   ))}
                 </div>
               </div>
             )}
+            
+            {getAvailableSizes().length > 0 && (
+              <div className="size-options">
+                <label>Size: <span className="selected-size">{selectedSize || 'Select Size'}</span></label>
+                <div className="size-buttons">
+                  {getAvailableSizes().map(({ name, inStock }) => (
+                    <button
+                      key={name}
+                      className={`size-button ${selectedSize === name ? 'selected' : ''} ${!inStock ? 'out-of-stock' : ''}`}
+                      onClick={() => handleSizeSelect(name)}
+                      disabled={!inStock}
+                    >
+                      {name}
+                      {!inStock && <span className="out-of-stock-label">Out of Stock</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="quantity-selector">
+              <label htmlFor="quantity">Quantity:</label>
+              <input
+                type="number"
+                id="quantity"
+                min="1"
+                value={quantity}
+                onChange={handleQuantityChange}
+                className="quantity-input"
+              />
+            </div>
           </div>
+          
+          <div className="product-actions">
+            <Button
+              onClick={handleAddToCart}
+              disabled={loading || !isProductAvailable()}
+              className="add-to-cart-button"
+            >
+              {loading ? 'Adding...' : 'Add to Cart'}
+              <FontAwesomeIcon icon={faShoppingCart} className="button-icon" />
+            </Button>
+            
+            <Button
+              onClick={handleWishlistToggle}
+              disabled={wishlistLoading}
+              className={`wishlist-button ${inWishlist ? 'in-wishlist' : ''}`}
+            >
+              <FontAwesomeIcon icon={inWishlist ? faHeart : farHeart} />
+              {inWishlist ? 'In Wishlist' : 'Add to Wishlist'}
+            </Button>
+          </div>
+          
+          <div className="product-description">
+            <h2>Product Description</h2>
+            <p>{product.description}</p>
+          </div>
+          
+          {product.features && product.features.length > 0 && (
+            <div className="product-features">
+              <h2>Features</h2>
+              <ul>
+                {product.features.map((feature, index) => (
+                  <li key={index}>{feature}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {product.careInstructions && product.careInstructions.length > 0 && (
+            <div className="care-instructions">
+              <h2>Care Instructions</h2>
+              <ul>
+                {product.careInstructions.map((instruction, index) => (
+                  <li key={index}>{instruction}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </div>
       

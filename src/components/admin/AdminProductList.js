@@ -295,36 +295,10 @@ const AdminProductList = () => {
 
   // Format price for display
   const formatPrice = (price) => {
-    if (price === undefined || price === null) return '$0.00';
-    
-    // Check if price is already a formatted string
-    if (typeof price === 'string' && price.startsWith('$')) {
-      return price;
+    if (price === undefined || price === null) {
+      return '৳0.00';
     }
-    
-    // Convert to number if it's a string containing a number
-    if (typeof price === 'string' && !isNaN(price)) {
-      price = parseFloat(price);
-    }
-    
-    // Don't modify the original price value for formatting
-    let formattedPrice = price;
-    
-    // Only convert from cents if we're confident the price is actually stored in cents
-    // Check for non-decimal prices ending with multiple zeros (e.g. 1200, 15000)
-    // or prices that are suspiciously high for a retail product (e.g. 9999)
-    if (Number.isInteger(price) && 
-        ((price >= 1000 && price.toString().endsWith('00')) || 
-         price >= 9999)) {
-      formattedPrice = price / 100;
-    }
-    
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(formattedPrice);
+    return `৳${price.toFixed(2)}`;
   };
 
   // Format date for display

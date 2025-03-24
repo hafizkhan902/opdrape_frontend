@@ -147,6 +147,55 @@ const OrderConfirmation = () => {
   const normalizeOrderData = (orderData) => {
     console.log("Raw order data received for normalization:", orderData);
     
+    // Helper function to extract product image from various sources
+    const getProductImage = (item) => {
+      // If item has a product object with colorVariants
+      if (item.product && typeof item.product === 'object') {
+        // First check for colorVariants array
+        if (item.product.colorVariants && 
+            Array.isArray(item.product.colorVariants) && 
+            item.product.colorVariants.length > 0) {
+          
+          const colorVariant = item.product.colorVariants[0];
+          
+          // Check if colorVariant has images array
+          if (colorVariant.images && Array.isArray(colorVariant.images) && colorVariant.images.length > 0) {
+            const imageData = colorVariant.images[0];
+            
+            // Handle string or object image data
+            if (typeof imageData === 'string') {
+              return imageData;
+            } else if (imageData && typeof imageData === 'object') {
+              return imageData.url || imageData.src || imageData.path || '';
+            }
+          }
+        }
+        
+        // Also check for a single colorVariant object (not in array)
+        if (item.product.colorVariant) {
+          if (item.product.colorVariant.images && item.product.colorVariant.images.length > 0) {
+            const imageData = item.product.colorVariant.images[0];
+            return typeof imageData === 'string' 
+              ? imageData 
+              : (imageData.url || imageData.src || imageData.path || '');
+          }
+        }
+        
+        // Fallback to direct image properties on the product
+        if (item.product.image) return item.product.image;
+        if (item.product.mainImage) return item.product.mainImage;
+        if (item.product.imageUrl) return item.product.imageUrl;
+      }
+      
+      // If item itself has image properties
+      if (item.image) return item.image;
+      if (item.imageUrl) return item.imageUrl;
+      if (item.imgUrl) return item.imgUrl;
+      
+      // Last resort fallback to a placeholder
+      return '';
+    };
+    
     // Generate an order number with OPDR prefix if none exists
     let orderNumber = orderData.orderNumber || orderData.number || '';
     if (!orderNumber || orderNumber === 'N/A') {
@@ -209,9 +258,9 @@ const OrderConfirmation = () => {
               productInfo.name || productInfo.productName || productInfo.title || 'Product',
         price: price,
         quantity: parseInt(item.quantity || 1, 10),
-        image: item.image || item.imageUrl || productInfo.image || productInfo.imageUrl || '',
+        image: getProductImage(item),
         color: item.color || item.variant || productInfo.color || productInfo.variant || '',
-        size: item.size || productInfo.size || '',
+        size: typeof item.size === 'object' ? item.size.name : (item.size || productInfo.size || ''),
         subtotal: price * parseInt(item.quantity || 1, 10)
       };
     }) : [];
@@ -407,13 +456,11 @@ const OrderConfirmation = () => {
   
   // Format currency
   const formatCurrency = (amount) => {
-    // Handle case where amount is undefined, null, NaN, or not a number
-    if (amount === undefined || amount === null || isNaN(amount) || typeof amount !== 'number') {
+    if (typeof amount !== 'number' || isNaN(amount)) {
       console.warn(`Invalid amount for currency formatting: ${amount}`);
-      return '$0';
+      return '৳0';
     }
-    // Format as whole number without decimal places
-    return `$${Math.round(parseFloat(amount))}`;
+    return `৳${amount.toFixed(2)}`;
   };
   
   // Calculate total function to ensure consistent calculation
@@ -601,7 +648,7 @@ const OrderConfirmation = () => {
                     <div className="receipt-variant">
                       {item.color && <span>Color: {item.color}</span>}
                       {item.color && item.size && ', '}
-                      {item.size && <span>Size: {item.size}</span>}
+                      {item.size && <span>Size: {typeof item.size === 'object' ? item.size.name : item.size}</span>}
                     </div>
                   )}
                 </div>
@@ -879,7 +926,7 @@ const OrderConfirmation = () => {
                                 <div className="item-variant">
                                   {item.color && <span>Color: {item.color}</span>}
                                   {item.color && item.size && ' / '}
-                                  {item.size && <span>Size: {item.size}</span>}
+                                  {item.size && <span>Size: {typeof item.size === 'object' ? item.size.name : item.size}</span>}
                                 </div>
                               )}
                             </div>

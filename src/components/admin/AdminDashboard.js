@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { getAdminProducts, getAdminOrders, getUserProfile } from '../../services/api';
+import { getAdminProducts, getAdminOrders, getUserProfile, getAdminUsers } from '../../services/api';
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
@@ -64,14 +64,24 @@ const AdminDashboard = () => {
           }
         }
         
-        // For customers, we don't have a direct API call, so we'll either:
-        // 1. Keep the mock data for now
-        // 2. Calculate it from orders (unique customer IDs)
-        let totalCustomers = 85; // Default fallback
-        
-        if (Array.isArray(recentOrders) && recentOrders.length > 0) {
-          // Try to get unique customer count from orders
-          try {
+        // Fetch customers count using the admin users API
+        let totalCustomers = 0;
+        try {
+          const usersResponse = await getAdminUsers();
+          if (usersResponse?.data) {
+            if (Array.isArray(usersResponse.data)) {
+              totalCustomers = usersResponse.data.length;
+            } else if (usersResponse.data.users && Array.isArray(usersResponse.data.users)) {
+              totalCustomers = usersResponse.data.users.length;
+            } else if (usersResponse.data.total) {
+              totalCustomers = usersResponse.data.total;
+            }
+          }
+          console.log('Real customer count fetched:', totalCustomers);
+        } catch (err) {
+          console.error('Error fetching customers count:', err);
+          // If the API call fails, we'll try to calculate from orders as fallback
+          if (Array.isArray(ordersResponse?.data) || Array.isArray(ordersResponse?.data?.orders)) {
             const ordersList = Array.isArray(ordersResponse.data) 
               ? ordersResponse.data 
               : (ordersResponse.data.orders || []);
@@ -87,9 +97,8 @@ const AdminDashboard = () => {
             
             if (uniqueCustomerIds.size > 0) {
               totalCustomers = uniqueCustomerIds.size;
+              console.log('Fallback customer count calculated from orders:', totalCustomers);
             }
-          } catch (err) {
-            console.error('Error calculating unique customers:', err);
           }
         }
         

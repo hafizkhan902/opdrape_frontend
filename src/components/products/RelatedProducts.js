@@ -87,35 +87,10 @@ const RelatedProducts = ({ productId, currentProductCategory, limit = 4 }) => {
 
   // Format price with appropriate currency
   const formatPrice = (price) => {
-    try {
-      // Convert string prices to numbers
-      if (typeof price === 'string' && !isNaN(parseFloat(price))) {
-        price = parseFloat(price);
-      }
-      
-      // Handle zero or negative prices
-      if ((typeof price === 'number' && (price <= 0 || isNaN(price))) || price === 'N/A') {
-        return '$0.00';
-      }
-      
-      // Format number with 2 decimal places without using toFixed
-      if (typeof price === 'number') {
-        // Round to 2 decimal places and format as string
-        const roundedPrice = (Math.round(price * 100) / 100)
-          .toString()
-          .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-          
-        // Ensure there are 2 decimal places
-        const parts = roundedPrice.split('.');
-        const formattedPrice = parts[0] + '.' + (parts[1] ? parts[1].padEnd(2, '0') : '00');
-        return `$${formattedPrice}`;
-      }
-      
-      return `$${price}`;
-    } catch (err) {
-      console.error('Error formatting price in RelatedProducts:', err);
-      return '$0.00';
+    if (typeof price !== 'number' || isNaN(price)) {
+      return '৳0.00';
     }
+    return `৳${price.toFixed(2)}`;
   };
 
   // Get product image based on color variants or default image

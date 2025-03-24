@@ -12,15 +12,23 @@ const API = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
-  withCredentials: false, // Set to true if your API requires credentials
+  withCredentials: true, // Changed to true to support session cookies
 });
+
+// Log the API endpoint being used
+console.log(`API Service initialized with baseURL: ${API_ENDPOINT}`);
 
 // Add request interceptor to attach auth token
 API.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem(AUTH_TOKEN_NAME);
     if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
+      // Ensure token is properly formatted
+      const cleanToken = token.replace('Bearer ', '').trim();
+      config.headers['Authorization'] = `Bearer ${cleanToken}`;
+      
+      // Log request for debugging
+      console.log(`API Request to ${config.url}`);
     }
     
     // Add additional headers for CORS support
@@ -29,6 +37,7 @@ API.interceptors.request.use(
     return config;
   },
   (error) => {
+    console.error('Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
@@ -37,13 +46,30 @@ API.interceptors.request.use(
 API.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Handle 401 Unauthorized errors
-    if (error.response && error.response.status === 401) {
-      // Clear localStorage and redirect to login
+    console.error('API Error:', error);
+    
+    // Handle various error scenarios
+    if (error.response) {
+      switch (error.response.status) {
+        case 401:
+          // Clear auth data and redirect to login
       localStorage.removeItem(AUTH_TOKEN_NAME);
       localStorage.removeItem('user');
-      window.location.href = '/login';
+          window.location.href = '/login?reason=session_expired';
+          break;
+        case 403:
+          console.error('Access forbidden:', error.response.data);
+          break;
+        case 422:
+          console.error('Validation error:', error.response.data);
+          break;
+        default:
+          console.error('Server error:', error.response.data);
+      }
+    } else if (error.request) {
+      console.error('No response received:', error.request);
     }
+    
     return Promise.reject(error);
   }
 );
@@ -84,42 +110,118 @@ export const loginUser = (credentials) => {
     return Promise.resolve(mockAdminResponse);
   }
   
-  // Additional test account: Allow testing with 'test-admin@example.com' as well
-  if (credentials.email === 'test-admin@example.com' && credentials.password === 'password123') {
-    console.log('Test admin credentials detected - returning mock admin data');
-    
-    // Create a mock admin token and user data (using role only)
-    const mockTestAdminResponse = {
-      data: {
-        token: 'mock-test-admin-token-for-testing',
-        user: {
-          id: 'admin-2',
-          email: 'test-admin@example.com',
-          name: 'Test Admin User',
-          role: 'admin', // Only using role, not isAdmin flag
-          createdAt: new Date().toISOString()
-        }
-      }
-    };
-    
-    // Store directly in localStorage for redundancy
-    try {
-      localStorage.setItem(AUTH_TOKEN_NAME, mockTestAdminResponse.data.token);
-      localStorage.setItem('user', JSON.stringify(mockTestAdminResponse.data.user));
-      console.log('API - Stored test admin user directly in localStorage');
-    } catch (e) {
-      console.error('API - Error storing test admin user in localStorage:', e);
-    }
-    
-    return Promise.resolve(mockTestAdminResponse);
-  }
-  
   // Regular API call for non-admin users
-  return API.post('/users/login', credentials);
+  return API.post('/users/login', credentials)
+    .catch(error => {
+      console.error('Login API Error:', error);
+      
+      // Handle specific server errors
+      if (error.response) {
+        const { status, data } = error.response;
+        
+        // If server returns 500 with generateToken error, provide more specific error
+        if (status === 500 && data.error === 'generateToken is not defined') {
+          error.isServerError = true;
+          error.friendlyMessage = 'The authentication service is temporarily unavailable. Please try again later or contact support if the issue persists.';
+          console.error('Server authentication service error:', data.error);
+        }
+        
+        // Log detailed error information
+        console.error('Server Error Details:', {
+          status,
+          statusText: error.response.statusText,
+          data: data,
+          endpoint: '/users/login'
+        });
+      }
+      
+      throw error;
+    });
 };
 
-export const registerUser = (userData) => API.post('/users/register', userData);
+// Enhanced registration function with better error handling
+export const registerUser = async (userData) => {
+  try {
+    console.log('Attempting to register user:', userData.email);
+    
+    // Validate required fields
+    const requiredFields = ['firstname', 'lastname', 'email', 'password'];
+    const missingFields = requiredFields.filter(field => !userData[field]);
+    
+    if (missingFields.length > 0) {
+      throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+    }
+    
+    // Make the registration request
+    const response = await API.post('/users/register', userData);
+    
+    // If successful, store auth data
+    if (response.data && response.data.token) {
+      localStorage.setItem(AUTH_TOKEN_NAME, response.data.token);
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+      console.log('User registered successfully');
+    }
+    
+    return response;
+  } catch (error) {
+    console.error('Registration error:', error);
+    
+    // Handle specific error cases
+    if (error.response) {
+      switch (error.response.status) {
+        case 409:
+          throw new Error('This email is already registered');
+        case 422:
+          throw new Error('Invalid registration data: ' + JSON.stringify(error.response.data.errors));
+        default:
+          throw new Error('Registration failed: ' + (error.response.data.message || 'Please try again'));
+      }
+    }
+    
+    throw error;
+  }
+};
+
 export const forgotPassword = (email) => API.post('/users/forgot-password', { email });
+
+/**
+ * Reset user password
+ * @param {object} passwordData - Object with currentPassword and newPassword
+ * @returns {Promise} - Promise resolved with the API response
+ */
+export const resetPassword = async (passwordData) => {
+  try {
+    // Get token from localStorage
+    const token = localStorage.getItem(AUTH_TOKEN_NAME);
+    console.log('Change Password - Token exists:', !!token);
+    
+    if (!token) {
+      console.error('Change Password - No token found in localStorage');
+      throw new Error('Authentication token is missing. Please log in again.');
+    }
+    
+    // Use the correct endpoint: /users/change-password
+    console.log('Change Password - Using correct endpoint: /users/change-password');
+    
+    // Make direct API call with authentication header
+    const response = await axios({
+      method: 'POST',
+      url: `${API_URL}/users/change-password`,
+      data: passwordData,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    console.log('Change Password - Response status:', response.status);
+    return response.data;
+  } catch (error) {
+    console.error('Error changing password:', error);
+    console.error('Error response:', error.response?.data);
+    throw error;
+  }
+};
 
 // Enhanced getUserProfile with fallback options
 export const getUserProfile = () => {
@@ -300,10 +402,10 @@ export const getProducts = (params) => {
     });
 };
 
-export const getProductById = (productId) => {
+export const getProductById = (productId, isAdmin = false) => {
   const isMongoDB_ID = productId && /^[0-9a-f]{24}$/i.test(productId);
   
-  console.log(`API Service: Getting product by ID: ${productId} (MongoDB ID: ${isMongoDB_ID})`);
+  console.log(`API Service: Getting product by ID: ${productId} (MongoDB ID: ${isMongoDB_ID}, Admin: ${isAdmin})`);
   
   if (!productId) {
     console.error("API Service: Invalid product ID provided:", productId);
@@ -315,79 +417,284 @@ export const getProductById = (productId) => {
     return Promise.reject(new Error("Invalid MongoDB product ID format"));
   }
   
-  // First try the standard endpoint
-  return API.get(`/products/${productId}`)
+  // Always use the products endpoint regardless of isAdmin
+  // This endpoint works for both admin and non-admin contexts
+  const endpoint = `/products/${productId}`;
+  
+  // Make the request
+  return API.get(endpoint)
     .then(response => {
     console.log(`API Service: Product data response for ${productId}:`, response.data);
     return response;
     })
     .catch(error => {
-      console.error(`API Service: Error with primary endpoint for product ${productId}:`, error);
+      console.error(`API Service: Error getting product ${productId}:`, error);
+      throw new Error(`Failed to fetch product ${productId}: ${error.message}`);
+    });
+};
+
+export const getProductsByCategory = (category, params) => {
+  console.log(`Fetching products for category: ${category}`);
+  return API.get(`/products/category/${category}`, { params })
+    .then(response => {
+      // Log the full response structure to debug
+      console.log(`Raw response for category ${category}:`, response.data);
       
-      // Try with direct axios call as fallback
-      return axios({
-        method: 'GET',
-        url: `/products/${productId}`,
-        baseURL: API_URL,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem(AUTH_TOKEN_NAME)}`
+      // Check what structure we have and normalize it
+      let products = [];
+      let total = 0;
+      
+      // Case 1: Response directly contains an array of products
+      if (Array.isArray(response.data)) {
+        console.log(`Response contains array of ${response.data.length} products`);
+        products = response.data;
+        total = response.data.length;
+      } 
+      // Case 2: Response has products in data.products (expected format)
+      else if (response.data && Array.isArray(response.data.products)) {
+        console.log(`Response contains ${response.data.products.length} products in data.products`);
+        products = response.data.products;
+        total = response.data.total || products.length;
+      }
+      // Case 3: Data might be nested differently
+      else if (response.data && typeof response.data === 'object') {
+        // Look for any array property that might contain products
+        const potentialArrays = Object.entries(response.data)
+          .filter(([key, value]) => Array.isArray(value) && value.length > 0)
+          .map(([key, value]) => ({ key, value }));
+          
+        if (potentialArrays.length > 0) {
+          console.log(`Found potential product arrays:`, 
+            potentialArrays.map(({key, value}) => `${key}: ${value.length} items`));
+          
+          // Use the first array found
+          const firstArray = potentialArrays[0];
+          products = firstArray.value;
+          total = products.length;
+          console.log(`Using ${firstArray.key} as products array with ${products.length} items`);
         }
-      }).catch(thirdError => {
-        console.error(`API Service: All product endpoints failed for ${productId}:`, thirdError);
-        
-        // Check localStorage for mock products if enabled
-        if (ENABLE_MOCK_ORDERS) {
-          try {
-            const mockProductsStr = localStorage.getItem('mockProducts');
-            if (mockProductsStr) {
-              const mockProducts = JSON.parse(mockProductsStr);
-              const mockProduct = mockProducts.find(p => p._id === productId);
-              
-              if (mockProduct) {
-                console.log(`API Service: Found mock product for ID ${productId}:`, mockProduct);
+      }
+      
+      // Transform the response to the expected format
+      const normalizedResponse = {
+        ...response,
+        data: {
+          products: products,
+          total: total,
+          page: params?.page || 1,
+          limit: params?.limit || 12,
+          totalPages: Math.ceil(total / (params?.limit || 12))
+        }
+      };
+      
+      console.log(`Normalized response for ${category} contains ${products.length} products`);
+      return normalizedResponse;
+    })
+    .catch(error => {
+      console.error(`Error fetching products for category ${category}:`, error);
+      
+      // Create fallback products for the specific category
+      const fallbackProducts = generateFallbackProductsForCategory(category, 8);
+      
+      // Return a mock response with fallback data
                 return {
-                  data: mockProduct,
+        data: {
+          products: fallbackProducts,
+          total: fallbackProducts.length,
+          page: params?.page || 1,
+          limit: params?.limit || 12,
+          totalPages: 1
+        },
                   status: 200,
-                  statusText: 'OK (Mock Product)'
-                };
-              }
-              
-              // Generate a new mock product with this ID if not found
-              const newMockProduct = {
-                _id: productId,
-                name: "Generated Mock Product",
-                description: "This product was generated for testing since the API is unavailable",
-                price: Math.floor(Math.random() * 5000) + 500, // Random price between 500-5500
-                image: "https://via.placeholder.com/300x400",
-                category: "testing",
-                stock: Math.floor(Math.random() * 50) + 5 // Random stock between 5-55
-              };
-              
-              console.log(`API Service: Generated new mock product for ID ${productId}:`, newMockProduct);
-              
-              // Add to mock products in localStorage
-              mockProducts.push(newMockProduct);
-              localStorage.setItem('mockProducts', JSON.stringify(mockProducts));
-              
-              return {
-                data: newMockProduct,
-                status: 200,
-                statusText: 'OK (Generated Mock Product)'
-              };
-            }
-          } catch (localStorageError) {
-            console.error(`API Service: Error accessing mock products in localStorage:`, localStorageError);
-          }
+        statusText: 'OK (Fallback Data)',
+      };
+    });
+};
+
+// Helper function to generate fallback products for a specific category
+const generateFallbackProductsForCategory = (category, count = 8) => {
+  const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
+  const products = [];
+  
+  for (let i = 1; i <= count; i++) {
+    products.push({
+      _id: `fallback-${category}-${i}`,
+      name: `${categoryName} Product ${i}`,
+      description: `This is a fallback product for the ${categoryName} category.`,
+      price: 29.99 + i * 10,
+      salePrice: (29.99 + i * 10) * 0.8,
+      category: category,
+      inventory: {
+        total: 50,
+        reserved: 0
+      },
+      rating: 4.5,
+      reviewCount: 10,
+      colorVariants: [
+        {
+          color: { name: 'Black', hexCode: '#000000' },
+          sizes: [
+            { name: 'S', inStock: true },
+            { name: 'M', inStock: true },
+            { name: 'L', inStock: true }
+          ],
+          images: [`https://source.unsplash.com/random/400x500/?${category},fashion,${i}`]
+        },
+        {
+          color: { name: 'Blue', hexCode: '#0047c2' },
+          sizes: [
+            { name: 'S', inStock: true },
+            { name: 'M', inStock: true },
+            { name: 'L', inStock: false }
+          ],
+          images: [`https://source.unsplash.com/random/400x500/?${category},blue,${i}`]
         }
-        
-        throw new Error(`Failed to fetch product ${productId} after multiple attempts`);
-      });
+      ],
+      isFeatured: i <= 2,
+      createdAt: new Date().toISOString()
+    });
+  }
+  
+  return products;
+};
+
+// Function to generate fallback products for a specific tag
+const generateFallbackProductsForTag = (tag, count = 8) => {
+  const tagName = tag.charAt(0).toUpperCase() + tag.slice(1);
+  const products = [];
+  
+  // Generate random categories for diversity in the fallback products
+  const possibleCategories = ['men', 'women', 'kids', 'accessories'];
+  
+  for (let i = 1; i <= count; i++) {
+    // Alternate between categories for variety
+    const category = possibleCategories[i % possibleCategories.length];
+    
+    products.push({
+      _id: `fallback-tag-${tag}-${i}`,
+      name: `${tagName} ${category.charAt(0).toUpperCase() + category.slice(1)} Item ${i}`,
+      description: `This is a product tagged with "${tagName}".`,
+      price: 29.99 + i * 10,
+      salePrice: (29.99 + i * 10) * 0.8,
+      category: category,
+      inventory: {
+        total: 50,
+        reserved: 0
+      },
+      rating: 4.5,
+      reviewCount: 10,
+      tags: [tag, category],
+      colorVariants: [
+        {
+          color: { name: 'Black', hexCode: '#000000' },
+          sizes: [
+            { name: 'S', inStock: true },
+            { name: 'M', inStock: true },
+            { name: 'L', inStock: true }
+          ],
+          images: [`https://source.unsplash.com/random/400x500/?${tag},fashion,${i}`]
+        },
+        {
+          color: { name: 'Blue', hexCode: '#0047c2' },
+          sizes: [
+            { name: 'S', inStock: true },
+            { name: 'M', inStock: true },
+            { name: 'L', inStock: false }
+          ],
+          images: [`https://source.unsplash.com/random/400x500/?${tag},fashion,${i+10}`]
+        }
+      ],
+      isFeatured: i <= 2,
+      createdAt: new Date().toISOString()
+    });
+  }
+  
+  return products;
+};
+
+export const searchProducts = (params) => API.get('/products/search', { params });
+
+// New function to get products by tag
+export const getProductsByTag = (tag, params) => {
+  console.log(`Fetching products with tag: ${tag}`);
+  
+  // Use the specific backend endpoint for banner/tag products
+  return API.get(`/products/banner/${tag}`, { params })
+    .then(response => {
+      // Log the full response structure to debug
+      console.log(`Raw response for tag ${tag}:`, response.data);
+      
+      // Check what structure we have and normalize it
+      let products = [];
+      let total = 0;
+      
+      // Case 1: Response directly contains an array of products
+      if (Array.isArray(response.data)) {
+        console.log(`Response contains array of ${response.data.length} products`);
+        products = response.data;
+        total = response.data.length;
+      } 
+      // Case 2: Response has products in data.products (expected format)
+      else if (response.data && Array.isArray(response.data.products)) {
+        console.log(`Response contains ${response.data.products.length} products in data.products`);
+        products = response.data.products;
+        total = response.data.total || products.length;
+      }
+      // Case 3: Data might be nested differently
+      else if (response.data && typeof response.data === 'object') {
+        // Look for any array property that might contain products
+        const potentialArrays = Object.entries(response.data)
+          .filter(([key, value]) => Array.isArray(value) && value.length > 0)
+          .map(([key, value]) => ({ key, value }));
+          
+        if (potentialArrays.length > 0) {
+          console.log(`Found potential product arrays:`, 
+            potentialArrays.map(({key, value}) => `${key}: ${value.length} items`));
+          
+          // Use the first array found
+          const firstArray = potentialArrays[0];
+          products = firstArray.value;
+          total = products.length;
+          console.log(`Using ${firstArray.key} as products array with ${products.length} items`);
+        }
+      }
+      
+      // Transform the response to the expected format
+      const normalizedResponse = {
+        ...response,
+        data: {
+          products: products,
+          total: total,
+          page: params?.page || 1,
+          limit: params?.limit || 12,
+          totalPages: Math.ceil(total / (params?.limit || 12))
+        }
+      };
+      
+      console.log(`Normalized response for tag ${tag} contains ${products.length} products`);
+      return normalizedResponse;
+    })
+    .catch(error => {
+      console.error(`Error fetching products for tag ${tag}:`, error);
+      
+      // Create fallback products for the specific tag if API fails
+      const fallbackProducts = generateFallbackProductsForTag(tag, 8);
+      
+      // Return a mock response with fallback data
+      return {
+        data: {
+          products: fallbackProducts,
+          total: fallbackProducts.length,
+          page: params?.page || 1,
+          limit: params?.limit || 12,
+          totalPages: 1
+        },
+        status: 200,
+        statusText: 'OK (Fallback Data - Tag)',
+      };
   });
 };
 
-export const getProductsByCategory = (category, params) => API.get(`/products/category/${category}`, { params });
-export const searchProducts = (params) => API.get('/products/search', { params });
 export const getProductReviews = (productId) => {
   console.log(`API Service: Fetching reviews for product ${productId}`);
   return API.get(`/products/${productId}/reviews`).then(response => {
@@ -520,7 +827,24 @@ export const getRelatedProducts = (productId) => {
       throw error;
     });
 };
-export const getProductCategories = () => API.get('/products/categories');
+export const getProductCategories = () => {
+  console.log('Returning hardcoded categories (no backend endpoint available)');
+  
+  // Since there is no dedicated categories endpoint, use hardcoded categories
+  const categories = [
+    { id: 'men', name: 'Men', slug: 'men' },
+    { id: 'women', name: 'Women', slug: 'women' },
+    { id: 'kids', name: 'Kids', slug: 'kids' },
+    { id: 'accessories', name: 'Accessories', slug: 'accessories' }
+  ];
+  
+  // Return a promise that resolves immediately with hardcoded categories
+  return Promise.resolve({
+    data: categories,
+    status: 200,
+    statusText: 'OK (Hardcoded Data)',
+  });
+};
 
 // Cart and wishlist API calls
 export const getCart = () => {
@@ -539,17 +863,32 @@ export const getCart = () => {
 // Alias for getCart for better naming
 export const getUserCart = getCart;
 
-export const addToCart = (productData) => {
-  console.log('Adding product to cart:', productData);
-  return API.post('/users/cart', productData)
-    .then(response => {
-      console.log('Product added to cart:', response.data);
+export const addToCart = async (cartItem) => {
+  try {
+    // Format the cart item data according to the required structure
+    const cartData = {
+      productId: cartItem.productId,  // Use productId directly from cartItem
+      colorVariant: {
+        color: {
+          name: cartItem.colorVariant.color.name,
+          hexCode: cartItem.colorVariant.color.hexCode
+        }
+      },
+      size: {
+        name: cartItem.size.name,
+        quantity: cartItem.size.quantity
+      }
+    };
+
+    console.log('Adding to cart with data:', cartData);
+    
+    // Use the API instance with the correct base URL
+    const response = await API.post('/cart/add', cartData);
       return response;
-    })
-    .catch(error => {
+  } catch (error) {
       console.error('Error adding product to cart:', error);
       throw error;
-    });
+  }
 };
 
 export const updateCartItem = (productId, quantity) => {
@@ -697,78 +1036,47 @@ export const removeFromWishlist = (productId) => API.delete(`/users/wishlist/${p
 export const createOrder = (orderData) => {
   console.log('Creating order with data:', orderData);
   
-  // Enhanced validation and extraction of product IDs
-  const validatedItems = orderData.items.filter(item => {
-    // Extract the correct product ID based on the structure
-    let productId;
+  // Format the order items to include color variant and size if needed
+  const formattedItems = orderData.items.map(item => {
+    // Check if the item already has the correct structure with valid color and size info
+    if (item.colorVariant?.color?.name && item.size?.name) {
+      return item;
+    }
     
-    // If item.product is an object (nested product), use its _id
-    if (item.product && typeof item.product === 'object') {
-      productId = item.product._id;
-      console.log(`Found nested product object, extracted ID: ${productId}`);
-    } 
-    // If item.product is a string, use it directly
-    else if (item.product && typeof item.product === 'string') {
-      productId = item.product;
-      console.log(`Found product ID as string: ${productId}`);
-    }
-    // Check item.productId as fallback
-    else if (item.productId) {
-      productId = item.productId;
-      console.log(`Using item.productId: ${productId}`);
-    }
-    // Also check _id on the item itself (might be the case in some cart structures)
-    else if (item._id && item._id !== item.product) {
-      // Only use item._id if it's not the same as item.product to avoid using cart item IDs
-      console.log(`Using item._id as fallback, but need to verify it's a product ID`);
-      // Check if this is stored in localStorage to verify it's a valid product
-      try {
-        const mockProductsStr = localStorage.getItem('mockProducts');
-        if (mockProductsStr) {
-          const mockProducts = JSON.parse(mockProductsStr);
-          const foundProduct = mockProducts.find(p => p._id === item._id);
-          if (foundProduct) {
-            productId = item._id;
-            console.log(`Confirmed item._id ${productId} is a valid product ID`);
-          } else {
-            console.log(`item._id ${item._id} is not found in products, might be cart item ID`);
-            return false;
-          }
-        } else {
-          // If we can't verify, it's safer to exclude this item
-          console.log(`Cannot verify if item._id ${item._id} is a product ID, excluding item`);
-          return false;
+    const productId = item.product?._id || item.product || item.productId;
+    
+    // For products without color variants or for items where color data is missing,
+    // we want to check if we can fetch this product's first available color variant
+    // instead of using a hardcoded "Default" value that might not exist
+    
+    return {
+      product: productId,
+      colorVariant: {
+        color: {
+          // Only use fallback if absolutely necessary
+          name: item.colorVariant?.color?.name || item.color?.name || item.colorName || item.color || '',
+          hexCode: item.colorVariant?.color?.hexCode || item.color?.hexCode || item.colorHexCode || ''
         }
-      } catch (e) {
-        console.error('Error checking localStorage for product validation:', e);
-        return false;
+      },
+      size: {
+        name: item.size?.name || item.sizeName || item.size || '',
+        quantity: item.quantity || 1
       }
-    }
-    
-    // Final check - ensure we have a valid MongoDB ID format
-    const isValidMongoId = productId && /^[0-9a-f]{24}$/i.test(productId);
-    
-    if (!isValidMongoId) {
-      console.error(`Invalid MongoDB ID format or missing product ID: ${productId}`);
-      return false;
-    }
-    
-    // Store the extracted productId back on the item for use in formatting
-    item.extractedProductId = productId;
-    return true;
+    };
   });
-  
-  if (validatedItems.length === 0) {
-    console.error('No valid items with proper product IDs found');
-    return Promise.reject(new Error('Order must contain at least one valid product ID'));
+
+  // Validate items - only check for product ID, not color or size
+  // The backend will handle validation for required color variants
+  const invalidItems = formattedItems.filter(item => !item.product);
+
+  if (invalidItems.length > 0) {
+    console.error('Invalid items found:', invalidItems);
+    return Promise.reject(new Error('Some items are missing product information'));
   }
-  
-  // Format the order data according to the backend requirements
+
+  // Format the complete order data
   const formattedOrderData = {
-    items: validatedItems.map(item => ({
-      product: item.extractedProductId, // Use the extracted product ID
-      quantity: item.quantity
-    })),
+    items: formattedItems,
     shippingAddress: {
       street: orderData.shippingAddress.street,
       city: orderData.shippingAddress.city,
@@ -776,48 +1084,35 @@ export const createOrder = (orderData) => {
       zipCode: orderData.shippingAddress.zipCode,
       country: orderData.shippingAddress.country
     },
-    paymentMethod: orderData.paymentMethod
+    paymentMethod: orderData.paymentMethod,
+    paymentDetails: orderData.paymentDetails || {}
   };
   
   // Add payment details for mobile payment methods
   if ((orderData.paymentMethod === 'bkash' || orderData.paymentMethod === 'nagad') && 
       (orderData.paymentDetails || orderData.mobileNumber)) {
-    
-    // Handle both formats: either nested under paymentDetails or direct properties
     formattedOrderData.paymentDetails = {
       paymentNumber: orderData.paymentDetails?.paymentNumber || orderData.mobileNumber || orderData.paymentNumber,
       transactionId: orderData.paymentDetails?.transactionId || orderData.transactionId
     };
-    
-    // Validate payment number format (must be 11 digits for Bangladesh)
-    const paymentNumber = formattedOrderData.paymentDetails.paymentNumber;
-    if (!paymentNumber || !/^\d{11}$/.test(paymentNumber)) {
-      console.warn(`Payment number ${paymentNumber} is not in correct format. Should be 11 digits.`);
-    }
-    
-    // Validate transaction ID (must be at least 6 characters)
-    const transactionId = formattedOrderData.paymentDetails.transactionId;
-    if (!transactionId || transactionId.length < 6) {
-      console.warn(`Transaction ID ${transactionId} is too short. Should be at least 6 characters.`);
-    }
   }
-  
-  console.log('Formatted order data for API with correct product IDs:', formattedOrderData);
+
+  console.log('Formatted order data:', formattedOrderData);
   
   // Function to try different API endpoints
   const tryCreateOrder = async () => {
-    // Try first endpoint: /orders
     try {
       console.log('Attempting to create order with endpoint: /orders');
       const response = await API.post('/orders', formattedOrderData);
-      console.log('Order created successfully with endpoint /orders:', response.data);
+      console.log('Order created successfully:', response.data);
       return response;
-    } catch (error1) {
-      console.error('Error creating order with endpoint /orders:', error1);
+    } catch (error) {
+      console.error('Error creating order:', error);
       
-      // Try second endpoint with baseURL modifications as fallback
+      if (error.response?.status === 404) {
+        // Try alternative endpoint
       try {
-        console.log('Attempting to create order with custom endpoint');
+          console.log('Attempting alternative endpoint');
         const response = await axios({
           method: 'POST',
           url: '/orders',
@@ -828,71 +1123,21 @@ export const createOrder = (orderData) => {
           },
           data: formattedOrderData
         });
-        console.log('Order created successfully with custom endpoint:', response.data);
+          console.log('Order created successfully with alternative endpoint:', response.data);
         return response;
-      } catch (error3) {
-        console.error('All order creation endpoints failed');
-        
-        // Get the most appropriate error
-        const responseError = error1.response || error3.response;
-        
-        if (responseError) {
-          console.error('Error response from server:', {
-            status: responseError.status,
-            statusText: responseError.statusText,
-            data: responseError.data
-          });
-          
-          // Handle specific errors
-          if (responseError.status === 404 && responseError.data.error?.includes('Product') && responseError.data.error?.includes('not found')) {
-            console.error('This error is caused by a product ID that does not exist in the database. Will enable mock order.');
-            
-            // If mock orders are enabled, return a mock response
-            if (ENABLE_MOCK_ORDERS) {
-              console.log('Using mock order as fallback since mock orders are enabled');
-              const mockOrderId = 'MOCK' + Date.now().toString(36).substring(4).toUpperCase();
-              return {
-                data: {
-                  _id: mockOrderId,
-                  id: mockOrderId,
-                  status: 'Processing',
-                  createdAt: new Date().toISOString(),
-                  items: formattedOrderData.items,
-                  shippingAddress: formattedOrderData.shippingAddress,
-                  paymentMethod: formattedOrderData.paymentMethod
-                },
-                status: 200,
-                statusText: 'OK (Mock Order)'
-              };
-            }
-          }
+        } catch (altError) {
+          console.error('Alternative endpoint also failed:', altError);
+          throw altError;
         }
-        
-        // If all options fail and no mock order is created, throw the error
-        throw error3;
       }
+      
+      throw error;
     }
   };
-  
-  // Execute the order creation with multiple endpoint attempts
+
   return tryCreateOrder()
     .then(response => {
-      console.log('Order created successfully:', response.data);
-      
-      // Store the order in localStorage as a backup
-      try {
-        const userOrders = JSON.parse(localStorage.getItem('userOrders') || '[]');
-        const orderToStore = {
-          ...response.data,
-          id: response.data._id || response.data.id || response.data.orderId
-        };
-        userOrders.unshift(orderToStore);
-        localStorage.setItem('userOrders', JSON.stringify(userOrders));
-        console.log('Order also saved to localStorage as backup');
-      } catch (storageError) {
-        console.error('Error saving order to localStorage:', storageError);
-      }
-      
+      console.log('Order creation successful:', response.data);
       return response;
     });
 };
@@ -969,69 +1214,21 @@ export const getAdminProducts = (params = {}) => {
  * @returns {Promise} - API response
  */
 export const createProduct = (productData) => {
-  console.log('Creating new product with data:', productData);
+  console.log('Creating product with data:', productData);
   
   // Check if productData is FormData, if so, we need to modify the content type
   const isFormData = productData instanceof FormData;
   
-  let url = '/products';
-  let data = productData;
-  
-  // Check if we need to extract data from FormData
-  if (isFormData) {
-    const productDataJson = productData.get('data');
-    
-    if (productDataJson) {
-      console.log('Found JSON data in FormData:', productDataJson);
-      // If we're using FormData but have JSON inside, we'll send separate requests
-      
-      // First send the JSON data
-      return axios({
-        method: 'post',
-        url: url,
-        baseURL: API_URL,
-        data: JSON.parse(productDataJson),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem(AUTH_TOKEN_NAME)}`
-        }
+  // Use the correct endpoint without admin prefix
+  return API.post('/products', productData, {
+    headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {}
       })
         .then(response => {
           console.log('Product created successfully:', response.data);
-          
-          // If we have an image, upload it separately
-          const image = productData.get('image');
-          if (image && image.size > 0) {
-            console.log('Uploading product image for new product:', response.data._id);
-            
-            const imageData = new FormData();
-            imageData.append('image', image);
-            
-            // Try to upload the image to the new product
-            return axios({
-              method: 'post',
-              url: `/products/${response.data._id}/image`, 
-              baseURL: API_URL,
-              data: imageData,
-              headers: {
-                'Authorization': `Bearer ${localStorage.getItem(AUTH_TOKEN_NAME)}`
-              }
-            })
-              .then(imageResponse => {
-                console.log('Product image uploaded successfully:', imageResponse.data);
-                return response; // Return the original product response
-              })
-              .catch(imageError => {
-                console.error('Error uploading product image:', imageError);
-                return response; // Still return the product response even if image upload fails
-              });
-          }
-          
           return response;
         })
         .catch(error => {
           console.error('Error creating product:', error);
-          
           if (error.response) {
             console.error('Error response from server:', {
               status: error.response.status,
@@ -1039,38 +1236,6 @@ export const createProduct = (productData) => {
               data: error.response.data
             });
           }
-          
-          return Promise.reject(error);
-        });
-    }
-  }
-  
-  // Use axios directly to set the correct headers
-  return axios({
-    method: 'post',
-    url: url,
-    baseURL: API_URL,
-    data: data,
-    headers: {
-      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
-      'Authorization': `Bearer ${localStorage.getItem(AUTH_TOKEN_NAME)}`
-    }
-  })
-    .then(response => {
-      console.log('Product created successfully:', response.data);
-      return response;
-    })
-    .catch(error => {
-      console.error('Error creating product:', error);
-      
-      if (error.response) {
-        console.error('Error response from server:', {
-          status: error.response.status,
-          statusText: error.response.statusText,
-          data: error.response.data
-        });
-      }
-      
       return Promise.reject(error);
     });
 };
@@ -1092,83 +1257,9 @@ export const updateProduct = (productId, productData) => {
   // Check if productData is FormData, if so, we need to modify the content type
   const isFormData = productData instanceof FormData;
   
-  // If we have FormData with JSON data inside, handle it specifically
-  if (isFormData) {
-    const productDataJson = productData.get('data');
-    
-    if (productDataJson) {
-      console.log('Found JSON data in FormData for update:', productDataJson);
-      
-      // First update the product with JSON data
-      return axios({
-        method: 'put',
-        url: `/products/${productId}`,
-        baseURL: API_URL,
-        data: JSON.parse(productDataJson),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem(AUTH_TOKEN_NAME)}`
-        }
-      })
-        .then(response => {
-          console.log('Product updated successfully:', response.data);
-          
-          // If we have an image, upload it separately
-          const image = productData.get('image');
-          if (image && image.size > 0) {
-            console.log('Uploading product image for updated product:', productId);
-            
-            const imageData = new FormData();
-            imageData.append('image', image);
-            
-            // Try to upload the image to the product
-            return axios({
-              method: 'post', 
-              url: `/products/${productId}/image`,
-              baseURL: API_URL,
-              data: imageData,
-              headers: {
-                'Authorization': `Bearer ${localStorage.getItem(AUTH_TOKEN_NAME)}`
-              }
-            })
-              .then(imageResponse => {
-                console.log('Product image uploaded successfully:', imageResponse.data);
-                return response; // Return the original product response
-              })
-              .catch(imageError => {
-                console.error('Error uploading product image:', imageError);
-                return response; // Still return the product response even if image upload fails
-              });
-          }
-          
-          return response;
-        })
-        .catch(error => {
-          console.error(`Error updating product ${productId}:`, error);
-          
-          if (error.response) {
-            console.error('Error response from server:', {
-              status: error.response.status,
-              statusText: error.response.statusText,
-              data: error.response.data
-            });
-          }
-          
-          return Promise.reject(error);
-        });
-    }
-  }
-  
-  // Default case: send data as is
-  return axios({
-    method: 'put',
-    url: `/products/${productId}`,
-    baseURL: API_URL,
-    data: productData,
-    headers: {
-      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
-      'Authorization': `Bearer ${localStorage.getItem(AUTH_TOKEN_NAME)}`
-    }
+  // Use the correct endpoint without admin prefix
+  return API.patch(`/products/${productId}`, productData, {
+    headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {}
   })
     .then(response => {
       console.log('Product updated successfully:', response.data);
@@ -1195,22 +1286,15 @@ export const updateProduct = (productId, productData) => {
  * @returns {Promise} - API response
  */
 export const deleteProduct = (productId) => {
-  console.log(`Deleting product with ID: ${productId}`);
+  console.log(`Deleting product ${productId}`);
   
   if (!productId) {
-    console.error('No product ID provided for deletion');
+    console.error('No product ID provided for delete');
     return Promise.reject(new Error('Product ID is required'));
   }
   
-  return axios({
-    method: 'delete',
-    url: `/admin/products/${productId}`,
-    baseURL: API_URL,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${localStorage.getItem(AUTH_TOKEN_NAME)}`
-    }
-  })
+  // Use the correct endpoint without admin prefix
+  return API.delete(`/products/${productId}`)
     .then(response => {
       console.log('Product deleted successfully:', response.data);
       return response;
@@ -1600,21 +1684,9 @@ export const deleteUser = (userId) => {
   return API.delete(`/admin/users/${userId}`)
     .catch(error => {
       console.error(`Error deleting user with ID ${userId}:`, error);
+      console.error('Error details:', error.response ? error.response.data : 'No response data');
       
-      // Try with alternative endpoint
-      return API.delete(`/users/${userId}`)
-        .catch(secondError => {
-          console.error(`Error with secondary delete endpoint for user ID ${userId}:`, secondError);
-          
-          console.log('Simulating successful user deletion for testing');
-          
-          // Simulate a successful deletion
-          return {
-            data: { success: true, message: 'User deleted successfully' },
-            status: 200,
-            statusText: 'OK (Mock deletion)'
-          };
-        });
+      throw new Error(`Failed to delete user: ${error.message}`);
     });
 };
 

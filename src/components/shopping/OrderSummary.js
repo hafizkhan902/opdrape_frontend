@@ -29,17 +29,11 @@ const OrderSummary = ({
   
   // Format price to display with proper currency
   const formatPrice = (price) => {
-    console.log('Formatting price:', price);
+    if (price === undefined || price === null) return '৳0';
     const numericPrice = typeof price === 'string' ? parseFloat(price) : price;
-    return new Intl.NumberFormat('bn-BD', {
-      style: 'currency',
-      currency: 'BDT',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(numericPrice || 0);
+    if (isNaN(numericPrice) || numericPrice < 0) return '৳0';
+    return `৳${Math.round(numericPrice).toLocaleString('en-BD')}`;
   };
-
-  console.log('OrderSummary props:', { items, subtotal, shipping, tax, discount, total });
 
   return (
     <div className={`order-summary ${className}`}>
@@ -49,24 +43,27 @@ const OrderSummary = ({
       {showItems && items && items.length > 0 && (
         <div className="summary-items">
           {items.map((item, index) => {
-            const itemTotal = (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0);
-            console.log(`Item ${index + 1}:`, { 
-              name: item.name, 
-              price: item.price, 
-              quantity: item.quantity, 
-              total: itemTotal 
-            });
+            // First try to get basePrice, then fall back to regular price
+            const rawPrice = item.basePrice || item.price;
+            const itemPrice = typeof rawPrice === 'string' ? parseFloat(rawPrice) : rawPrice;
+            const validPrice = isNaN(itemPrice) ? 0 : itemPrice;
+            
+            const itemQuantity = typeof item.quantity === 'string' ? parseInt(item.quantity) : item.quantity;
+            const validQuantity = isNaN(itemQuantity) ? 0 : itemQuantity;
+            
+            const itemTotal = validPrice * validQuantity;
+            
             return (
-              <div key={item.id || index} className="summary-item-row">
+              <div key={item.id || item.productId || index} className="summary-item-row">
                 <div className="item-info">
-                  <span className="item-quantity">{item.quantity}x</span>
+                  <span className="item-quantity">{validQuantity}×</span>
                   <span className="item-name">
-                    {item.name || item.productName}
+                    {item.name}
                     {(item.color || item.size) && (
                       <span className="item-variant">
                         {item.color && <span>Color: {item.color}</span>}
-                        {item.color && item.size && ', '}
-                        {item.size && <span>Size: {item.size}</span>}
+                        {item.color && item.size && ' • '}
+                        {item.size && <span>Size: {typeof item.size === 'object' ? item.size.name : item.size}</span>}
                       </span>
                     )}
                   </span>
@@ -133,12 +130,21 @@ const OrderSummary = ({
 };
 
 OrderSummary.propTypes = {
-  items: PropTypes.array,
-  subtotal: PropTypes.number.isRequired,
-  shipping: PropTypes.number.isRequired,
-  tax: PropTypes.number.isRequired,
+  items: PropTypes.arrayOf(PropTypes.shape({
+    id: PropTypes.string,
+    productId: PropTypes.string,
+    name: PropTypes.string,
+    price: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    basePrice: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    quantity: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    color: PropTypes.string,
+    size: PropTypes.oneOfType([PropTypes.object, PropTypes.string])
+  })),
+  subtotal: PropTypes.number,
+  shipping: PropTypes.number,
+  tax: PropTypes.number,
   discount: PropTypes.number,
-  total: PropTypes.number.isRequired,
+  total: PropTypes.number,
   showItems: PropTypes.bool,
   showDiscount: PropTypes.bool,
   showDetails: PropTypes.bool,
@@ -147,10 +153,15 @@ OrderSummary.propTypes = {
 
 OrderSummary.defaultProps = {
   items: [],
+  subtotal: 0,
+  shipping: 0,
+  tax: 0,
   discount: 0,
+  total: 0,
   showItems: true,
   showDiscount: true,
   showDetails: true,
   className: ''
 };
+
 export default OrderSummary; 

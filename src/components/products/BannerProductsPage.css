@@ -1,0 +1,150 @@
+.banner-products-page {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.banner-header {
+  height: 300px;
+  width: 100%;
+  background-size: cover;
+  background-position: center;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.banner-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.banner-header-content {
+  color: white;
+  text-align: center;
+  padding: 2rem;
+  max-width: 800px;
+}
+
+.banner-header-content h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.banner-header-content p {
+  font-size: 1.2rem;
+  opacity: 0.9;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Tag badge styles */
+.tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: rgba(255, 255, 255, 0.9);
+  color: #1a202c;
+  padding: 0.5rem 1rem;
+  border-radius: 2rem;
+  margin-top: 1rem;
+  font-size: 1rem;
+  font-weight: 500;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.tag-badge svg {
+  color: #4299e1;
+  font-size: 0.875rem;
+}
+
+.banner-products-nav {
+  margin-bottom: 2rem;
+}
+
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  color: #495057;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.back-button:hover {
+  background-color: #e9ecef;
+  color: #212529;
+}
+
+.banner-products-content {
+  margin-bottom: 3rem;
+}
+
+.banner-products-loading,
+.banner-products-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+}
+
+.banner-products-loading svg {
+  font-size: 2rem;
+  color: #4299e1;
+  margin-bottom: 1rem;
+}
+
+.banner-products-error h2 {
+  color: #e53e3e;
+  margin-bottom: 1rem;
+}
+
+.banner-products-error p {
+  margin-bottom: 1.5rem;
+  color: #718096;
+}
+
+@media (max-width: 768px) {
+  .banner-header {
+    height: 250px;
+  }
+  
+  .banner-header-content h1 {
+    font-size: 2rem;
+  }
+  
+  .banner-header-content p {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .banner-header {
+    height: 200px;
+  }
+  
+  .banner-header-content h1 {
+    font-size: 1.5rem;
+  }
+  
+  .banner-header-content p {
+    font-size: 0.9rem;
+  }
+} 
