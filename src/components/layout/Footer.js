@@ -16,12 +16,8 @@ import {
 import './Footer.css';
 
 const Footer = () => {
-  const currentYear = new Date().getFullYear();
-
   const handleNewsletterSubmit = (e) => {
     e.preventDefault();
-    // This would normally call an API endpoint to submit the email
-    // Since this isn't connected to a real API, just show an alert
     alert('Thank you for subscribing to our newsletter!');
     e.target.reset();
   };
@@ -32,7 +28,9 @@ const Footer = () => {
         <div className="footer-top">
           {/* Company Info */}
           <div className="footer-section">
-            <h3 className="footer-title">StyleShop</h3>
+            <div className="footer-logo">
+              <img src="/images/logo.png" alt="OpDrape" />
+            </div>
             <p className="footer-description">
               Your destination for trendy and affordable fashion. We offer the latest styles
               for men, women, and children at prices you'll love.
@@ -113,15 +111,15 @@ const Footer = () => {
             <ul className="footer-contact">
               <li>
                 <FontAwesomeIcon icon={faMapMarkerAlt} className="footer-icon" />
-                <span>123 Fashion St, Style City, SC 12345</span>
+                <span>Uttara Sector 12</span>
               </li>
               <li>
                 <FontAwesomeIcon icon={faPhone} className="footer-icon" />
-                <span>(123) 456-7890</span>
+                <span>01645272591</span>
               </li>
               <li>
                 <FontAwesomeIcon icon={faEnvelope} className="footer-icon" />
-                <span>support@styleshop.com</span>
+                <span>info@opdrape.store</span>
               </li>
             </ul>
 
@@ -143,7 +141,7 @@ const Footer = () => {
 
         <div className="footer-bottom">
           <div className="footer-copyright">
-            <p>&copy; {currentYear} StyleShop. All rights reserved.</p>
+            <p>&copy; 2025 optovex. All rights reserved.</p>
           </div>
           <div className="footer-policy-links">
             <Link to="/privacy-policy">Privacy Policy</Link>

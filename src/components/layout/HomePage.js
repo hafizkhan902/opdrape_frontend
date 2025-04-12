@@ -37,10 +37,6 @@ const HomePage = () => {
 
       {/* Featured Products Section */}
       <section className="featured-products-section">
-        <h2 className="section-title">Featured Products</h2>
-        <p className="section-subtitle">
-          Discover our most popular and newest items
-        </p>
         <ProductGrid 
           title="Featured Products" 
           showFilters={false}

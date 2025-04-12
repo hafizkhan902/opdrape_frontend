@@ -53,9 +53,10 @@ API.interceptors.response.use(
       switch (error.response.status) {
         case 401:
           // Clear auth data and redirect to login
-      localStorage.removeItem(AUTH_TOKEN_NAME);
-      localStorage.removeItem('user');
-          window.location.href = '/login?reason=session_expired';
+          localStorage.removeItem(AUTH_TOKEN_NAME);
+          localStorage.removeItem('user');
+          // Use window.location.replace instead of href to prevent back button issues
+          window.location.replace('/login?reason=session_expired');
           break;
         case 403:
           console.error('Access forbidden:', error.response.data);
@@ -883,8 +884,8 @@ export const addToCart = async (cartItem) => {
     console.log('Adding to cart with data:', cartData);
     
     // Use the API instance with the correct base URL
-    const response = await API.post('/cart/add', cartData);
-      return response;
+    const response = await API.post('/users/cart', cartData);
+    return response;
   } catch (error) {
       console.error('Error adding product to cart:', error);
       throw error;

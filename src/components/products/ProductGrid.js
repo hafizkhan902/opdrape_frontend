@@ -14,7 +14,6 @@ const ProductGrid = ({
   category = null,
   searchQuery = null,
   initialFilters = {},
-  initialSortOption = 'popularity',
   showFilters: propShowFilters = true,
   wishlistItems = [],
   customFetch = null
@@ -33,7 +32,6 @@ const ProductGrid = ({
   const [error, setError] = useState(null);
   const [totalProducts, setTotalProducts] = useState(0);
   const [filters, setFilters] = useState(initialFilters);
-  const [sortOption, setSortOption] = useState(initialSortOption);
   const [page, setPage] = useState(1);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [availableFilters, setAvailableFilters] = useState({
@@ -49,11 +47,6 @@ const ProductGrid = ({
   // Update URL search params when filters or sort changes
   useEffect(() => {
     const newParams = {};
-    
-    // Add sort option to URL
-    if (sortOption !== 'popularity') {
-      newParams.sort = sortOption;
-    }
     
     // Add page number to URL if not on first page
     if (page > 1) {
@@ -71,7 +64,7 @@ const ProductGrid = ({
     });
     
     setSearchParams(newParams);
-  }, [filters, sortOption, page, setSearchParams]);
+  }, [filters, page, setSearchParams]);
 
   // Load products based on conditions (category, search, or regular listing)
   useEffect(() => {
@@ -82,7 +75,6 @@ const ProductGrid = ({
       const queryParams = {
         page,
         limit,
-        sort: sortOption,
         ...filters
       };
 
@@ -161,7 +153,7 @@ const ProductGrid = ({
     };
 
     fetchProducts();
-  }, [effectiveCategory, searchQuery, page, limit, sortOption, filters, customFetch]);
+  }, [effectiveCategory, searchQuery, page, limit, filters, customFetch]);
 
   // Load filters and sort from URL on initial load
   useEffect(() => {
@@ -172,15 +164,10 @@ const ProductGrid = ({
       setPage(Number(params.page));
     }
     
-    // Set sort option from URL
-    if (params.sort) {
-      setSortOption(params.sort);
-    }
-    
     // Set filters from URL
     const urlFilters = {};
     Object.entries(params).forEach(([key, value]) => {
-      if (key !== 'page' && key !== 'sort') {
+      if (key !== 'page') {
         // Handle comma-separated values as arrays
         if (value.includes(',')) {
           urlFilters[key] = value.split(',');
@@ -224,12 +211,6 @@ const ProductGrid = ({
     
     // Reset to first page when filters change
     setPage(1);
-  };
-
-  // Update sort option
-  const handleSortChange = (e) => {
-    setSortOption(e.target.value);
-    setPage(1); // Reset to first page when sort changes
   };
 
   // Calculate total pages with fallback to prevent errors
@@ -421,22 +402,6 @@ const ProductGrid = ({
         {displayTitle && <h2 className="product-grid-title">{displayTitle}</h2>}
         
         <div className="product-grid-actions">
-          {/* Sort Dropdown */}
-          <div className="sort-container">
-            <label htmlFor="sort-select">Sort by:</label>
-            <select 
-              id="sort-select" 
-              value={sortOption} 
-              onChange={handleSortChange}
-              className="sort-select"
-            >
-              <option value="popularity">Popularity</option>
-              <option value="price_asc">Price: Low to High</option>
-              <option value="price_desc">Price: High to Low</option>
-              <option value="newest">Newest First</option>
-              <option value="rating">Customer Rating</option>
-            </select>
-          </div>
         </div>
       </div>
 
@@ -520,7 +485,6 @@ ProductGrid.propTypes = {
   category: PropTypes.string,
   searchQuery: PropTypes.string,
   initialFilters: PropTypes.object,
-  initialSortOption: PropTypes.string,
   showFilters: PropTypes.bool,
   wishlistItems: PropTypes.array,
   customFetch: PropTypes.func

@@ -21,15 +21,17 @@ const LoginForm = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
+  // Get return URL from query params
+  const searchParams = new URLSearchParams(location.search);
+  const returnUrl = searchParams.get('returnUrl') || '/';
+  const reason = searchParams.get('reason');
+  
   // Check for session expiry message
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const reason = params.get('reason');
-    
     if (reason === 'session_expired') {
       setSubmitError('Your session has expired. Please log in again.');
     }
-  }, [location]);
+  }, [reason]);
   
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -71,69 +73,43 @@ const LoginForm = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Clear any previous errors
-    setSubmitError(null);
-    
-    // Validate form
     if (!validateForm()) {
       return;
     }
     
+    setSubmitError('');
     setLoading(true);
-    
+
     try {
+      // Make the login request
       const response = await loginUser({
-        email: formData.email.trim(),
-        password: formData.password,
-        remember: formData.rememberMe
+        email: formData.email,
+        password: formData.password
       });
-      
-      // Store token in localStorage
+
+      // Store the token
       localStorage.setItem(AUTH_TOKEN_NAME, response.data.token);
+
+      // Store user data
+      const userData = response.data.user;
+      localStorage.setItem('user', JSON.stringify(userData));
+
+      // Update app context with user data
+      login(userData);
+
+      // Check if user is admin and trying to access admin area
+      const isAdmin = userData.isAdmin === true || userData.role === 'admin';
       
-      // Store user data in localStorage
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-      
-      // Update context with user data
-      login(response.data.user);
-      
-      // Get return URL from query params or use default
-      const params = new URLSearchParams(location.search);
-      const returnUrl = params.get('returnUrl') || '/';
-      
-      // Redirect to return URL or home page
-      navigate(returnUrl);
-    } catch (error) {
-      console.error('Login error:', error);
-      
-      // Handle specific error cases
-      if (error.response) {
-        switch (error.response.status) {
-          case 401:
-            setSubmitError('Invalid email or password');
-            break;
-          case 422:
-            if (error.response.data.errors) {
-              const serverErrors = {};
-              error.response.data.errors.forEach(err => {
-                serverErrors[err.field] = err.message;
-              });
-              setErrors(serverErrors);
-            } else {
-              setSubmitError('Invalid login data');
-            }
-            break;
-          case 429:
-            setSubmitError('Too many login attempts. Please try again later.');
-            break;
-          default:
-            setSubmitError(error.response.data.message || 'Login failed. Please try again.');
-        }
-      } else if (error.request) {
-        setSubmitError('Unable to connect to the server. Please check your internet connection.');
+      if (isAdmin && returnUrl.startsWith('/admin')) {
+        console.log("Login successful - Admin user, redirecting to admin area");
+        navigate(returnUrl, { replace: true });
       } else {
-        setSubmitError('An unexpected error occurred. Please try again later.');
+        console.log("Login successful - Redirecting to:", returnUrl);
+        navigate(returnUrl, { replace: true });
       }
+    } catch (err) {
+      console.error("Login error:", err);
+      setSubmitError(err.response?.data?.message || 'Failed to log in. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -209,22 +185,24 @@ const LoginForm = () => {
             </Link>
           </div>
           
-          <Button
-            type="submit"
-            className="login-button"
-            disabled={loading}
+          <Button 
+            type="submit" 
+            fullWidth 
             loading={loading}
+            disabled={loading}
           >
-            {loading ? 'Signing In...' : 'Sign In'}
+            Sign In
           </Button>
-          
-          <div className="register-prompt">
+        </form>
+        
+        <div className="login-footer">
+          <p>
             Don't have an account?{' '}
             <Link to="/register" className="register-link">
-              Create one now
+              Sign up here
             </Link>
-          </div>
-        </form>
+          </p>
+        </div>
       </div>
     </div>
   );

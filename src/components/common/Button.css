@@ -116,68 +116,6 @@
   margin-right: 8px;
 }
 
-/* Dark mode adjustments */
-@media (prefers-color-scheme: dark) {
-  .btn {
-    color: #ffffff;
-    border-color: #ffffff;
-  }
-  
-  .btn-primary {
-    border-color: #ffffff;
-    color: #ffffff;
-  }
-  
-  .btn-primary:hover {
-    background-color: #ffffff;
-    color: #000000;
-  }
-  
-  .btn-secondary {
-    border-color: #ffffff;
-    color: #ffffff;
-  }
-  
-  .btn-outline {
-    border-color: #ffffff;
-    color: #ffffff;
-  }
-  
-  .btn-outline:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-  }
-  
-  .btn-text {
-    color: #ffffff;
-  }
-  
-  /* Keep danger button with specific colors */
-  .btn-danger {
-    border-color: #c2705e;
-    color: #c2705e;
-  }
-  
-  .btn-danger:hover {
-    background-color: #c2705e;
-    color: #ffffff;
-  }
-  
-  .btn-spinner {
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-top-color: #ffffff;
-  }
-  
-  .btn:disabled {
-    border-color: #555555;
-    color: #aaaaaa;
-  }
-  
-  .btn:disabled:hover {
-    background-color: transparent;
-    color: #aaaaaa;
-  }
-}
-
 @keyframes spin {
   to {
     transform: rotate(360deg);

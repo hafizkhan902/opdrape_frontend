@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FaSearch, FaStar, FaFilter, FaTrash, FaEye, FaCheck, FaTimes, FaClock, FaFlag, FaSort } from 'react-icons/fa';
 import axios from 'axios';
+import Button from '../../common/Button';
 import './ReviewsList.css';
 import { getAdminReviews, deleteReview, updateReview } from './ReviewsApi';
 
@@ -24,7 +25,7 @@ const ReviewsList = () => {
   
   // Pagination and filtering
   const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get('page') || '1'));
-  const [limit, setLimit] = useState(parseInt(searchParams.get('limit') || '10'));
+  const [limit] = useState(parseInt(searchParams.get('limit') || '10'));
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'all');
   const [ratingFilter, setRatingFilter] = useState(searchParams.get('rating') || 'all');
   const [productFilter, setProductFilter] = useState(searchParams.get('productId') || 'all');
@@ -101,7 +102,7 @@ const ReviewsList = () => {
     if (sortBy !== 'newest') params.set('sort', sortBy);
     setSearchParams(params);
     
-  }, [currentPage, limit, statusFilter, ratingFilter, productFilter, dateFilter, sortBy, setSearchParams]);
+  }, [currentPage, limit, statusFilter, ratingFilter, productFilter, dateFilter, sortBy, setSearchParams, fetchReviews]);
   
   // Handle filter changes
   const applyFilters = () => {

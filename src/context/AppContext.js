@@ -32,19 +32,18 @@ const appReducer = (state, action) => {
     case ACTION_TYPES.LOGIN_SUCCESS:
       // Ensure user object includes isAdmin property
       const userData = action.payload;
-      if (userData) {
-        // Check for multiple ways to determine admin status
-        // Either explicit isAdmin flag or role === 'admin'
-        const isExplicitAdmin = !!userData.isAdmin;
-        const hasAdminRole = userData.role === 'admin';
-        userData.isAdmin = isExplicitAdmin || hasAdminRole;
+      if (userData && typeof userData === 'object') {
+        // Explicitly check and set admin status
+        userData.isAdmin = userData.isAdmin === true || userData.role === 'admin';
         
-        console.log('AppContext - Login success with userData:', userData);
-        console.log('AppContext - Admin status check:', { 
-          isExplicitAdmin, 
-          hasAdminRole, 
-          finalIsAdmin: userData.isAdmin 
-        });
+        // Store updated user data in localStorage
+        try {
+          localStorage.setItem('user', JSON.stringify(userData));
+          localStorage.setItem('isAdmin', String(userData.isAdmin));
+          console.log('AppContext - Stored user data with admin status:', userData);
+        } catch (e) {
+          console.error('AppContext - Error storing user data:', e);
+        }
       }
       return {
         ...state,
@@ -139,6 +138,7 @@ export const AppProvider = ({ children }) => {
         // Update localStorage with user data including admin status
         try {
           localStorage.setItem('user', JSON.stringify(userData));
+          localStorage.setItem('isAdmin', String(userData.isAdmin));
           console.log('AppContext - Updated localStorage with user data including admin status');
         } catch (storageErr) {
           console.error('AppContext - Error updating localStorage:', storageErr);
@@ -224,38 +224,42 @@ export const AppProvider = ({ children }) => {
   };
 
   // Login user
-  const login = (userData) => {
-    // Ensure user data has isAdmin property
-    if (userData) {
-      // Check for multiple ways to determine admin status
-      const isExplicitAdmin = !!userData.isAdmin;
-      const hasAdminRole = userData.role === 'admin';
-      userData.isAdmin = isExplicitAdmin || hasAdminRole;
-      
-      console.log('AppContext - Login function with userData:', userData);
-      console.log('AppContext - Login admin status check:', { 
-        isExplicitAdmin, 
-        hasAdminRole, 
-        finalIsAdmin: userData.isAdmin 
-      });
-      
-      // Store user data in localStorage
-      try {
-        localStorage.setItem('user', JSON.stringify(userData));
-        console.log('AppContext - Stored user data in localStorage during login');
-      } catch (e) {
-        console.error('AppContext - Error storing user data:', e);
-      }
+  const login = async (userData) => {
+    if (!userData || typeof userData !== 'object') {
+      console.error('Invalid user data provided to login function:', userData);
+      return;
     }
-    
-    dispatch({
-      type: ACTION_TYPES.LOGIN_SUCCESS,
-      payload: userData
-    });
-    
-    // Load cart and wishlist after login
-    loadCart();
-    loadWishlist();
+
+    try {
+      // Explicitly check and set admin status
+      const isAdmin = userData.isAdmin === true || userData.role === 'admin';
+      userData.isAdmin = isAdmin;
+
+      // Store auth state
+      localStorage.setItem('user', JSON.stringify(userData));
+      localStorage.setItem('isAdmin', String(isAdmin));
+      
+      console.log('AppContext - Login successful:', {
+        userData,
+        isAdmin,
+        authToken: localStorage.getItem(AUTH_TOKEN_NAME)
+      });
+
+      dispatch({
+        type: ACTION_TYPES.LOGIN_SUCCESS,
+        payload: userData
+      });
+
+      // Load cart and wishlist after login
+      await loadCart();
+      await loadWishlist();
+    } catch (error) {
+      console.error('AppContext - Error during login:', error);
+      dispatch({
+        type: ACTION_TYPES.AUTH_ERROR,
+        payload: 'Error processing login'
+      });
+    }
   };
 
   // Logout user

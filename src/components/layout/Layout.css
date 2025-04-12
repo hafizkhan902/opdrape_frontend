@@ -1,13 +1,108 @@
 .layout {
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
 }
 
 .main-content {
   flex: 1;
-  max-width: 1200px;
   width: 100%;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 1rem;
+  position: relative;
+}
+
+/* Add smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Improve mobile viewport */
+@viewport {
+  width: device-width;
+  zoom: 1.0;
+}
+
+/* Add safe area insets for modern mobile devices */
+@supports (padding: max(0px)) {
+  .main-content {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+}
+
+/* Add pull-to-refresh behavior */
+@media (max-width: 767px) {
+  .main-content {
+    overscroll-behavior-y: contain;
+  }
+}
+
+/* Add loading state */
+.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Add page transitions */
+.page-enter {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 300ms, transform 300ms;
+}
+
+.page-exit {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.page-exit-active {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 300ms, transform 300ms;
+}
+
+/* Add responsive padding */
+@media (max-width: 767px) {
+  .main-content {
+    padding: 0.75rem;
+  }
+}
+
+/* Add container query support */
+@container (min-width: 768px) {
+  .main-content {
+    padding: 1.5rem;
+  }
+}
+
+/* Add reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Add high contrast mode support */
+@media (forced-colors: active) {
+  .main-content {
+    border: 1px solid CanvasText;
+  }
+}
+
+/* Add print styles */
+@media print {
+  .main-content {
+    padding: 0;
+    max-width: none;
+  }
 } 

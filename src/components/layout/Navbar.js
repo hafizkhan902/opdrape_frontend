@@ -9,7 +9,8 @@ import {
   faBars, 
   faTimes,
   faSignOutAlt,
-  faLock
+  faLock,
+  faTachometerAlt
 } from '@fortawesome/free-solid-svg-icons';
 import { getProductCategories } from '../../services/api';
 import { useAppContext } from '../../context/AppContext';
@@ -29,6 +30,9 @@ const Navbar = () => {
   const searchInputRef = useRef(null);
   const { isAuthenticated, user, cart, wishlist, logout } = useAppContext();
   const navigate = useNavigate();
+  
+  // Check if user has admin role
+  const isAdmin = user?.isAdmin === true || user?.role === 'admin';
   
   // Add console log to debug user data
   useEffect(() => {
@@ -96,12 +100,50 @@ const Navbar = () => {
     }
   };
 
+  // Handle body scroll when mobile menu is open
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.classList.add('menu-open');
+    } else {
+      document.body.classList.remove('menu-open');
+    }
+    return () => {
+      document.body.classList.remove('menu-open');
+    };
+  }, [isMobileMenuOpen]);
+
+  // Close mobile menu when route changes
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [window.location.pathname]);
+
+  // Handle escape key to close mobile menu
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        setIsMobileMenuOpen(false);
+        setIsSearchOpen(false);
+        setIsUserMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, []);
+
+  // Handle mobile menu toggle with animation
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
-    // Close search if open
+    // Close other menus
     if (isSearchOpen) setIsSearchOpen(false);
+    if (isUserMenuOpen) setIsUserMenuOpen(false);
   };
-  
+
+  // Handle menu item click with animation
+  const handleMenuItemClick = () => {
+    setIsMobileMenuOpen(false);
+  };
+
   const toggleCart = () => {
     setIsCartOpen(!isCartOpen);
     // Close search if open
@@ -132,19 +174,20 @@ const Navbar = () => {
               className="mobile-menu-toggle" 
               onClick={toggleMobileMenu} 
               aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={isMobileMenuOpen}
             >
               <FontAwesomeIcon icon={isMobileMenuOpen ? faTimes : faBars} />
             </button>
           </div>
 
-          <nav className={`navbar-menu ${isMobileMenuOpen ? 'is-active' : ''}`}>
+          <nav className={`navbar-menu ${isMobileMenuOpen ? 'is-active' : ''} ${isLoading ? 'loading' : ''}`}>
             <div className="navbar-categories">
               {!isLoading && categories.map((category) => (
                 <Link 
                   key={category.id || category.name} 
                   to={`/products/category/${category.slug || category.name.toLowerCase()}`} 
                   className="navbar-item"
-                  onClick={() => setIsMobileMenuOpen(false)}
+                  onClick={handleMenuItemClick}
                 >
                   {category.name}
                 </Link>
@@ -160,7 +203,7 @@ const Navbar = () => {
                 <FontAwesomeIcon icon={faSearch} />
               </button>
 
-              <Link to="/wishlist" className="navbar-icon" aria-label="Wishlist">
+              <Link to="/wishlist" className="navbar-icon" aria-label="Wishlist" onClick={handleMenuItemClick}>
                 <FontAwesomeIcon icon={faHeart} />
                 {wishlistCount > 0 && (
                   <span className="wishlist-count">{wishlistCount}</span>
@@ -179,53 +222,95 @@ const Navbar = () => {
               </button>
 
               {isAuthenticated ? (
-                <div className="navbar-user-menu">
-                  <button className="user-menu-toggle" onClick={toggleUserMenu}>
-                    <FontAwesomeIcon icon={faUser} />
-                    <span className="user-name">{user?.firstName || user?.name?.split(' ')[0] || 'Account'}</span>
-                  </button>
-                  <div className={`user-dropdown ${isUserMenuOpen ? 'is-active' : ''}`}>
-                    <div className="user-dropdown-header">
-                      <div className="user-avatar">
-                        <span>{user?.firstName?.charAt(0) || user?.name?.charAt(0) || 'A'}</span>
-                      </div>
-                      <div className="user-info">
-                        <p className="user-fullname">{`${user?.firstName || ''} ${user?.lastName || ''}`}</p>
-                        <p className="user-email">{user?.email || ''}</p>
+                <>
+                  {isAdmin && (
+                    <div className="navbar-user-menu">
+                      <Link to="/admin" className="dashboard-btn" onClick={handleMenuItemClick}>
+                        <FontAwesomeIcon icon={faTachometerAlt} className="dashboard-icon" />
+                        <span className="dashboard-text">Dashboard</span>
+                      </Link>
+                      <div className={`user-dropdown ${isUserMenuOpen ? 'is-active' : ''}`}>
+                        <div className="user-dropdown-header">
+                          <div className="user-avatar">
+                            <span>{user?.firstName?.charAt(0) || user?.name?.charAt(0) || 'A'}</span>
+                          </div>
+                          <div className="user-info">
+                            <p className="user-fullname">{`${user?.firstName || ''} ${user?.lastName || ''}`}</p>
+                            <p className="user-email">{user?.email || ''}</p>
+                          </div>
+                        </div>
+                        <div className="dropdown-menu">
+                          <Link to="/account/change-password" className="dropdown-item" onClick={handleMenuItemClick}>
+                            <FontAwesomeIcon icon={faLock} className="dropdown-icon" />
+                            <span>Change Password</span>
+                          </Link>
+                          <button 
+                            onClick={() => {
+                              handleMenuItemClick();
+                              logout();
+                            }} 
+                            className="dropdown-item logout-item"
+                          >
+                            <FontAwesomeIcon icon={faSignOutAlt} className="dropdown-icon" />
+                            <span>Logout</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
-                    <div className="dropdown-menu">
-                      <Link to="/account" className="dropdown-item" onClick={() => setIsUserMenuOpen(false)}>
-                        <FontAwesomeIcon icon={faUser} className="dropdown-icon" />
-                        <span>My Account</span>
-                      </Link>
-                      <Link to="/orders" className="dropdown-item" onClick={() => setIsUserMenuOpen(false)}>
-                        <FontAwesomeIcon icon={faShoppingCart} className="dropdown-icon" />
-                        <span>My Orders</span>
-                      </Link>
-                      <Link to="/account/change-password" className="dropdown-item" onClick={() => setIsUserMenuOpen(false)}>
-                        <FontAwesomeIcon icon={faLock} className="dropdown-icon" />
-                        <span>Change Password</span>
-                      </Link>
+                  )}
+                  {!isAdmin && (
+                    <div className="navbar-user-menu">
                       <button 
-                        onClick={() => {
-                          setIsUserMenuOpen(false);
-                          logout();
-                        }} 
-                        className="dropdown-item logout-item"
+                        className="user-menu-toggle" 
+                        onClick={toggleUserMenu}
+                        aria-expanded={isUserMenuOpen}
                       >
-                        <FontAwesomeIcon icon={faSignOutAlt} className="dropdown-icon" />
-                        <span>Logout</span>
+                        <FontAwesomeIcon icon={faUser} />
                       </button>
+                      <div className={`user-dropdown ${isUserMenuOpen ? 'is-active' : ''}`}>
+                        <div className="user-dropdown-header">
+                          <div className="user-avatar">
+                            <span>{user?.firstName?.charAt(0) || user?.name?.charAt(0) || 'A'}</span>
+                          </div>
+                          <div className="user-info">
+                            <p className="user-fullname">{`${user?.firstName || ''} ${user?.lastName || ''}`}</p>
+                            <p className="user-email">{user?.email || ''}</p>
+                          </div>
+                        </div>
+                        <div className="dropdown-menu">
+                          <Link to="/account" className="dropdown-item" onClick={handleMenuItemClick}>
+                            <FontAwesomeIcon icon={faUser} className="dropdown-icon" />
+                            <span>My Account</span>
+                          </Link>
+                          <Link to="/orders" className="dropdown-item" onClick={handleMenuItemClick}>
+                            <FontAwesomeIcon icon={faShoppingCart} className="dropdown-icon" />
+                            <span>My Orders</span>
+                          </Link>
+                          <Link to="/account/change-password" className="dropdown-item" onClick={handleMenuItemClick}>
+                            <FontAwesomeIcon icon={faLock} className="dropdown-icon" />
+                            <span>Change Password</span>
+                          </Link>
+                          <button 
+                            onClick={() => {
+                              handleMenuItemClick();
+                              logout();
+                            }} 
+                            className="dropdown-item logout-item"
+                          >
+                            <FontAwesomeIcon icon={faSignOutAlt} className="dropdown-icon" />
+                            <span>Logout</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  )}
+                </>
               ) : (
                 <div className="navbar-auth">
-                  <Link to="/login" className="btn btn-login">
+                  <Link to="/login" className="btn btn-login" onClick={handleMenuItemClick}>
                     Login
                   </Link>
-                  <Link to="/register" className="btn btn-register">
+                  <Link to="/register" className="btn btn-register" onClick={handleMenuItemClick}>
                     Register
                   </Link>
                 </div>
